@@ -5,19 +5,23 @@ use tao::{
   };
   
 use env_logger;
+use wgpu::{Device, SurfaceConfiguration, Surface};
 
 use std::collections::HashMap;
 use std::borrow::{Borrow};
 
-
 fn main() {
+    pollster::block_on(run());
+}
+
+pub async fn run() {
     
     let mut dust = DustRenderer::new("penna label");
     let mut dust_main = DustMain::new();
     dust.add_plugin("text", &mut dust_main );
     
     let event_loop = EventLoop::new();
-    let mut window = Some(
+    let mut window_beforemove = Some(
         WindowBuilder::new()
         .with_decorations(true)
         .with_inner_size(tao::dpi::LogicalSize::new(300.0, 300.0))
@@ -25,7 +29,13 @@ fn main() {
         .with_transparent(true)
         .build(&event_loop)
         .unwrap()
-        );
+    );
+    
+    
+    
+    let (mut window, PhysicalSize, instance, device, mut surface, mut surface_configuration, queue, ) = setup(window_beforemove.unwrap()).await;
+    
+    let size = window.as_ref().unwrap().inner_size();
     
     env_logger::init();
     
@@ -81,22 +91,23 @@ fn main() {
                 Event::RedrawRequested(window_id)   => {
                     println!("\nredrawing!\n");
                     
-                    /*match state.render() {
+                    let result = dust.render(&device,&queue, "label", &surface, &surface_configuration);
+                    
+                    match result {
                         Ok(_) => {}
                         // Reconfigure the surface if lost
-                        Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
+                        Err(wgpu::SurfaceError::Lost) => resize_window(size, &mut surface_configuration, &device, &mut surface),
                         // The system is out of memory, we should probably quit
                         Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
                         // All other errors (Outdated, Timeout) should be resolved by the next frame
                         Err(e) => eprintln!("{:?}", e),
-                    } */
+                    } 
                   }
                        
                   _ => (),
             }
             
         });    
-    
     
 }
 
@@ -116,7 +127,7 @@ impl<'a> DustRenderer<'a> {
             tree: RenderElementTree::new()
         }
     }
-    fn add_plugin(&mut self, label: &'static str, plugin: &'a mut dyn RenderPlugin) {
+    fn add_plugin(&mut self, label: &'static str, plugin: &'a mut dyn RenderPlugin ) {
         self.plugins.insert(label,plugin);
         println!("adding plugin");
     }
@@ -149,7 +160,7 @@ impl<'a> DustRenderer<'a> {
                             r: 0.1,
                             g: 0.2,
                             b: 0.3,
-                            a: 0.0,
+                            a: 0.5,
                         }),
                         store: true,
                     },
@@ -234,7 +245,7 @@ impl RenderPlugin for DustMain {
 
 
 
-async fn setup(window: Window) -> (Window, PhysicalSize<u32>, wgpu::Instance, wgpu::Device, wgpu::Surface, wgpu::SurfaceConfiguration, wgpu::Queue, ){
+async fn setup(window: Window) -> (Option<Window>, PhysicalSize<u32>, wgpu::Instance, wgpu::Device, wgpu::Surface, wgpu::SurfaceConfiguration, wgpu::Queue, ){
     let size = window.inner_size();
         
     let instance_desc = wgpu::InstanceDescriptor::default();
@@ -285,5 +296,15 @@ async fn setup(window: Window) -> (Window, PhysicalSize<u32>, wgpu::Instance, wg
     };
     surface.configure(&device, &config);
     
-    (window, size, instance, device, surface, config, queue )
+    (Some(window), size, instance, device, surface, config, queue )
 }
+
+fn resize_window(new_size: tao::dpi::PhysicalSize<u32>, surface_configuration: &mut SurfaceConfiguration, device: &Device, surface: &mut Surface) {
+    if new_size.width > 0 && new_size.height > 0 {
+        //self.size = new_size;
+        surface_configuration.width = new_size.width;
+        surface_configuration.height = new_size.height;
+        surface.configure(device, surface_configuration);
+    }
+}
+
