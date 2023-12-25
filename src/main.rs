@@ -8,6 +8,7 @@ use env_logger;
 use wgpu::{Device, SurfaceConfiguration, Surface};
 
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::borrow::{Borrow};
 
 fn main() {
@@ -18,7 +19,7 @@ pub async fn run() {
     
     let mut dust = DustRenderer::new("penna label");
     let mut dust_main = DustMain::new();
-    dust.add_plugin("text", &mut dust_main );
+    dust.add_plugin("text", Rc::new(dust_main) );
     
     let event_loop = EventLoop::new();
     let mut window_beforemove = Some(
@@ -113,13 +114,13 @@ pub async fn run() {
 
 
 
-pub struct DustRenderer<'a> {
+pub struct DustRenderer {
     label: &'static str,
     //depth_buffer,
-    plugins: HashMap<&'static str, &'a mut dyn RenderPlugin>,
+    plugins: HashMap<&'static str, Rc<dyn RenderPlugin>>,
     tree: RenderElementTree,
 }
-impl<'a> DustRenderer<'a> {
+impl DustRenderer {
     fn new(label: &'static str,) -> Self {
         Self{
             label,
@@ -127,7 +128,7 @@ impl<'a> DustRenderer<'a> {
             tree: RenderElementTree::new()
         }
     }
-    fn add_plugin(&mut self, label: &'static str, plugin: &'a mut dyn RenderPlugin ) {
+    fn add_plugin(&mut self, label: &'static str, plugin: Rc<dyn RenderPlugin> ) {
         self.plugins.insert(label,plugin);
         println!("adding plugin");
     }
@@ -238,6 +239,9 @@ impl DustMain {
     }
 }
 impl RenderPlugin for DustMain {
+    fn prepare(&self) {
+    
+    }
     fn render<'rpass>(&'rpass self, rpass: &mut wgpu::RenderPass<'rpass>) {
         
     }
