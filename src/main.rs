@@ -1,3 +1,7 @@
+//cd Documents\nils\Programming\rust\gui\penna\dust_renderer
+
+
+
 use tao::{
     event::{Event, WindowEvent, KeyEvent, ElementState, self},
     event_loop::{ControlFlow, EventLoop},
@@ -9,7 +13,7 @@ use wgpu::{Device, SurfaceConfiguration, Surface};
 
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::borrow::{Borrow};
+
 
 fn main() {
     pollster::block_on(run());
@@ -17,9 +21,7 @@ fn main() {
 
 pub async fn run() {
     
-    let mut dust = DustRenderer::new("penna label");
-    let mut dust_main = DustMain::new();
-    dust.add_plugin("text", Rc::new(dust_main) );
+    
     
     let event_loop = EventLoop::new();
     let mut window_beforemove = Some(
@@ -32,11 +34,13 @@ pub async fn run() {
         .unwrap()
     );
     
-    
-    
-    let (mut window, PhysicalSize, instance, device, mut surface, mut surface_configuration, queue, ) = setup(window_beforemove.unwrap()).await;
+    let (mut window, physical_size, instance, device, mut surface, mut surface_configuration, queue, ) = setup(window_beforemove.unwrap()).await;
     
     let size = window.as_ref().unwrap().inner_size();
+    
+    let mut dust = DustRenderer::new("dust label DustRenderer");
+    let mut dust_main = DustMain::new(&device);
+    dust.add_plugin("text", Rc::new(dust_main) );
     
     env_logger::init();
     
@@ -125,7 +129,7 @@ impl DustRenderer {
         Self{
             label,
             plugins: HashMap::new().into(),
-            tree: RenderElementTree::new()
+            tree: RenderElementTree::new("label tree")
         }
     }
     fn add_plugin(&mut self, label: &'static str, plugin: Rc<dyn RenderPlugin> ) {
@@ -170,7 +174,7 @@ impl DustRenderer {
             });
             
             for p in self.plugins.values() {
-                p.render(&mut render_pass);
+                p.render(&mut render_pass, device);
             }
         }
         
@@ -180,11 +184,14 @@ impl DustRenderer {
     
         Ok(())
     }
+    fn insert_render_element(&mut self, render_element: RenderElement) -> u64 {
+        return self.tree.insert(render_element).unwrap();
+    }
 }
 
 trait RenderPlugin {
     fn prepare(&self) {}
-    fn render<'rpass>(&'rpass self, rpass: &mut wgpu::RenderPass<'rpass>) {}
+    fn render<'rpass>(&'rpass self, rpass: &mut wgpu::RenderPass<'rpass>, device: &Device) {}
 }
 
 struct RenderQueue {
@@ -215,26 +222,66 @@ impl Attachments {
 }
 
 struct RenderElementTree {
+    label: &'static str,
     render_elements: HashMap<u64, RenderElement>,
     attachments: Attachments,
 }
 impl RenderElementTree {
-    fn new() -> Self {
+    fn new(label: &'static str) -> Self {
         Self {
+            label,
             render_elements: HashMap::<u64, RenderElement>::new(),
             attachments: Attachments::new(),
         }
+    }
+    fn insert(&mut self, element: RenderElement) -> Result<u64, String> {
+        for i in 0..u64::MAX {
+            match self.render_elements.get(&i) {
+                Some(r) => {
+                        // go on
+                    },
+                None => {
+                    self.render_elements.insert(i, element);
+                    return Ok(i);
+                },
+        
+            }
+        }
+        let label = self.label;
+        let message = format!("failed to insert a RenderElement into a RenderElementTree label: {label}\n probable cause: keys up to u64::MAX taken" );
+        Err(message)
+        
     }
 }
 
 
 struct DustMain {
-    
+    compute_pipeline: wgpu::ComputePipeline,
 }
 impl DustMain {
-    fn new() -> Self {
+    fn new(device: &Device) -> Self {
+        
+        let module = device.create_shader_module(
+            wgpu::ShaderModuleDescriptor { 
+                label: Some("compute ShaderModuleDescriptor"), 
+                source: wgpu::ShaderSource::Wgsl(include_str!("dust.wgsl").into()),
+            }
+        );
+        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Render Pipeline Layout"),
+            bind_group_layouts: &[],
+            push_constant_ranges: &[],
+        });
+        
+        let desc = wgpu::ComputePipelineDescriptor { 
+            label: Some("ComputePipelineDescriptor"), 
+            layout: Some(&layout), 
+            module: &module, 
+            entry_point: "main_image",
+        };
+        let compute_pipeline = device.create_compute_pipeline(&desc);
         Self {
-            
+            compute_pipeline,
         }
     }
 }
@@ -242,7 +289,17 @@ impl RenderPlugin for DustMain {
     fn prepare(&self) {
     
     }
-    fn render<'rpass>(&'rpass self, rpass: &mut wgpu::RenderPass<'rpass>) {
+    fn render<'rpass>(&'rpass self, rpass: &mut wgpu::RenderPass<'rpass>, device: &Device) {
+        let input_f = &[1.0f32, 2.0f32];
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Render Encoder"),
+        });
+        {
+            let mut cpass = encoder.begin_compute_pass(&Default::default());
+            cpass.set_pipeline(&self.compute_pipeline);
+            
+            cpass.dispatch_workgroups(input_f.len() as u32, 1, 1);
+        }
         
     }
 }

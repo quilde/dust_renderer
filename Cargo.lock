@@ -644,6 +644,7 @@ dependencies = [
  "env_logger",
  "keyframe",
  "kurbo",
+ "mint",
  "pollster",
  "tao",
  "wgpu",

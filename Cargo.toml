@@ -13,3 +13,8 @@ pollster = "0.3.0"
 tao = "0.22.2"
 keyframe = "1.1.1"
 env_logger = "0.10.0"
+mint = {version = "0.5.9",optional = true}
+
+
+[features]
+encase = ["mint"]
