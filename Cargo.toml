@@ -18,3 +18,4 @@ mint = {version = "0.5.9",optional = true}
 
 [features]
 encase = ["mint"]
+
