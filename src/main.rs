@@ -38,7 +38,8 @@ pub async fn run() {
     let size = window.as_ref().unwrap().inner_size();
     
     let mut dust = DustRenderer::new("dust label DustRenderer");
-    let mut dust_main = DustMain::new(&device);
+    dust.prepare(&device, &queue);
+    let mut dust_main = DustMain::new(&device, dust.bindgroups());
     dust.add_plugin("text", Rc::new(dust_main) );
     
     env_logger::init();
