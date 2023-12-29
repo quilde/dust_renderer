@@ -6,7 +6,7 @@ use tao::{
     window::{WindowBuilder, Window, WindowId}, dpi::{PhysicalSize, LogicalSize},
   };
   
-use env_logger;
+
 use wgpu::{Device, Queue, SurfaceConfiguration, Surface, Extent3d};
 
 use std::collections::HashMap;
@@ -73,10 +73,13 @@ impl DustRenderer {
                             b: 0.3,
                             a: 0.5,
                         }),
-                        store: wgpu::StoreOp::Store,
+                        store: true,
+                        //store: wgpu::StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: None,
+                //timestamp_writes: None,
+                //occlusion_query_set: None,
             });
             
             for p in self.plugins.values() {
@@ -131,7 +134,8 @@ impl Attachments {
         }
     }
     pub fn prepare(&mut self, device: &Device, queue: &Queue) {
-        let dimensions = mint::Vector2::<u32>{x: 1, y: 1};
+        //let dimensions = glam::Vec2{x: 1.0, y: 1.0};
+        let dimensions = glam::UVec2{x: 1, y: 1};
         let texture_size = wgpu::Extent3d {
             width: dimensions.x,
             height: dimensions.y,
@@ -294,7 +298,7 @@ impl RenderPlugin for DustMain {
 
 
 
-pub async fn setup(window: Window) -> (Option<Window>, PhysicalSize<u32>, wgpu::Instance, wgpu::Device, wgpu::Surface, wgpu::SurfaceConfiguration, wgpu::Queue, ){
+pub async fn setup(window: tao::window::Window) -> (Option<Window>, PhysicalSize<u32>, wgpu::Instance, wgpu::Device, wgpu::Surface, wgpu::SurfaceConfiguration, wgpu::Queue, ){
     let size = window.inner_size();
         
     let instance_desc = wgpu::InstanceDescriptor::default();

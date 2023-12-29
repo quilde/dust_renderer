@@ -6,7 +6,7 @@ use tao::{
     window::{WindowBuilder, Window, WindowId}, dpi::{PhysicalSize, LogicalSize},
   };
   
-use env_logger;
+
 use wgpu::{Device, SurfaceConfiguration, Surface};
 
 use std::collections::HashMap;
@@ -42,7 +42,7 @@ pub async fn run() {
     let mut dust_main = DustMain::new(&device, dust.bindgroups());
     dust.add_plugin("text", Rc::new(dust_main) );
     
-    env_logger::init();
+    //env_logger::init();
     
     event_loop.run(move |event_main, _, control_flow| { //2: _
         *control_flow = ControlFlow::Wait;
