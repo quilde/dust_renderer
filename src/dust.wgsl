@@ -75,6 +75,6 @@ fn main_image(@builtin(global_invocation_id) id: vec3u) {
 }
 */
 
-@group(0) @binding(0) var screen: texture_storage_2d<rgba16float,write>;
-@group(0) @binding(1) var samplers: sampler;
+@group(0) @binding(0) var screen: texture_storage_2d<rgba8unorm,write>;
+//@group(0) @binding(1) var samplers: sampler;
 

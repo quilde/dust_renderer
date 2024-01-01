@@ -39,8 +39,8 @@ pub async fn run() {
     
     let mut dust = DustRenderer::new("dust label DustRenderer");
     dust.prepare(&device, &queue);
-    let mut dust_main = DustMain::new(&device, dust.bindgroups());
-    dust.add_plugin("text", Rc::new(dust_main) );
+    let mut dust_main = DustMain::new(&device, dust.bindgroups(), &surface_configuration);
+    dust.add_plugin("dust_main plugin", Rc::new(dust_main) );
     
     //env_logger::init();
     
