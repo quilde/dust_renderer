@@ -6,33 +6,35 @@ use tao::{
     window::{WindowBuilder, Window, WindowId}, dpi::{PhysicalSize, LogicalSize},
 };
 use wgpu::{Device, Queue, SurfaceConfiguration, Surface, Extent3d, Texture, SurfaceTexture, RenderPipeline};
-use std::collections::HashMap;
+use std::{collections::HashMap, cell::RefCell, borrow::BorrowMut, ops::DerefMut};
 use std::rc::Rc;
 
 pub struct DustRenderer {
     label: &'static str,
     //depth_buffer,
-    plugins: HashMap<&'static str, Rc<dyn RenderPlugin>>,
-    attachments: Attachments,
+    plugins: HashMap<&'static str, Rc<RefCell<dyn RenderPlugin>>>,
+    
 }
 impl DustRenderer {
     pub fn new(label: &'static str,) -> Self {
         Self{
             label,
             plugins: HashMap::new().into(),
-            attachments: Attachments::new(),
+            
         }
     }
-    pub fn prepare(&mut self, device: &Device, queue: &wgpu::Queue) {
-        self.attachments.prepare(&device, &queue);
+    pub fn prepare(&mut self, device: &Device, queue: &wgpu::Queue, config: &wgpu::SurfaceConfiguration) {
+        
+        for p in self.plugins.values() {
+            p.borrow_mut().setup(device, queue);
+            
+        }
     }
-    pub fn add_plugin(&mut self, label: &'static str, plugin: Rc<dyn RenderPlugin> ) {
+    pub fn add_plugin(&mut self, label: &'static str, plugin: Rc<RefCell<dyn RenderPlugin>> ) {
         self.plugins.insert(label,plugin);
-        println!("adding plugin");
+        println!("adding plugin. label: {}", label);
     }
-    pub fn bindgroups(&self) -> &Vec<wgpu::BindGroupLayout>{
-        &self.attachments.bind_group_layouts
-    }
+    
     pub fn render(
     &mut self,
     device: &wgpu::Device,
@@ -49,9 +51,10 @@ impl DustRenderer {
         
         for p in self.plugins.values() {
             //let p: &dyn RenderPlugin = *p.borrow();
-            p.prepare();
+            *p.borrow_mut().prepare(device, queue);
         }
         
+        let plugins: Vec<_> = self.plugins.values().borrow_mut().deref_mut().collect();
         
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -75,8 +78,9 @@ impl DustRenderer {
                 //occlusion_query_set: None,
             });
             
-            for p in self.plugins.values() {
-                p.render(&mut render_pass, device, &mut self.attachments);
+            for p in plugins {
+                //let p = p.borrow_mut();
+                p.render(&mut render_pass, device);
             }
         }
         
@@ -91,8 +95,10 @@ impl DustRenderer {
 
 
 pub trait RenderPlugin {
-    fn prepare(&self) {}
-    fn render<'rpass>(&'rpass self, rpass: &mut wgpu::RenderPass<'rpass>, device: &Device, attachments: &mut Attachments) {}
+    fn setup(&mut self, device: &wgpu::Device, queue: &wgpu::Queue){}
+    fn prepare(&mut self, device: &Device, queue: &Queue) {}
+    fn render<'rpass>(&'rpass self, rpass: &mut wgpu::RenderPass<'rpass>, device: &Device) {}
+    
     
 }
 
@@ -125,6 +131,120 @@ impl Attachments {
         }
     }
     pub fn prepare(&mut self, device: &Device, queue: &Queue) {
+        
+    }
+    pub fn bind_groups(&self) -> &Vec<wgpu::BindGroupLayout>{
+        &self.bind_group_layouts
+    }
+
+}
+
+pub struct DustMain {
+    compute_pipeline: wgpu::ComputePipeline,
+    //img_pipeline: wgpu::RenderPipeline,
+    attachments: Attachments,
+}
+impl DustMain {
+    pub fn new(device: &Device) -> Self {
+        let attachments = Attachments::new();
+        
+        
+        
+        
+        let compute_module = device.create_shader_module(
+            wgpu::ShaderModuleDescriptor { 
+                label: Some("compute ShaderModuleDescriptor"), 
+                source: wgpu::ShaderSource::Wgsl(include_str!("dust.wgsl").into()),
+            }
+        );
+        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Render Pipeline Layout"),
+            bind_group_layouts: &[&attachments.bind_group_layouts[0]],
+            push_constant_ranges: &[],
+        });
+        
+        let desc = wgpu::ComputePipelineDescriptor { 
+            label: Some("ComputePipelineDescriptor"), 
+            layout: Some(&layout), 
+            module: &compute_module, 
+            entry_point: "main_image",
+        };
+        let compute_pipeline = device.create_compute_pipeline(&desc);
+        
+        /*
+        let blending = 
+            Some(wgpu::BlendState{
+                color: wgpu::BlendComponent{
+                    src_factor: wgpu::BlendFactor::SrcAlpha,
+                    dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                    operation: wgpu::BlendOperation::Add,},
+                alpha: wgpu::BlendComponent::OVER
+            });
+        
+        let module_image = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("paint image"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("paint_image.wgsl").into()),
+        });
+        let layout_img =
+        device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Render Pipeline Layout paint image"),
+            bind_group_layouts: &[],
+            push_constant_ranges: &[],
+        });
+        let img_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Render Pipeline paint image"),
+            layout: Some(&layout_img),
+            vertex: wgpu::VertexState {
+                module: &module_image,
+                entry_point: "vtx_main", // 1.
+                buffers: &[
+                    
+                ], // 2.
+            },
+            fragment: Some(wgpu::FragmentState { // 3.
+                module: &module_image,
+                entry_point: "frag_main",
+                targets: &[Some(wgpu::ColorTargetState { // 4.
+                    format: config.format,
+                    blend: blending,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleStrip, // 1.
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw, // 2.
+                cull_mode: None, //Some(wgpu::Face::Back),
+                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
+                polygon_mode: wgpu::PolygonMode::Fill,
+                // Requires Features::DEPTH_CLIP_CONTROL
+                unclipped_depth: false,
+                // Requires Features::CONSERVATIVE_RASTERIZATION
+                conservative: false,
+            },
+            depth_stencil: None, // 1.
+            multisample: wgpu::MultisampleState::default(), /*{
+                count: 1, // 2.
+                mask: !0, // 3.
+                alpha_to_coverage_enabled: false, // 4.
+            },*/
+            multiview: None, // 5.
+        });
+        */
+        
+        
+        
+        Self {
+            compute_pipeline,
+            //img_pipeline,
+            attachments,
+        }
+    }
+}
+impl RenderPlugin for DustMain {
+    fn setup(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
+        let mut attachments = &mut self.attachments;
+        
         //let dimensions = glam::Vec2{x: 1.0, y: 1.0};
         let dimensions = glam::UVec2{x: 1, y: 1};
         let texture_size = wgpu::Extent3d {
@@ -226,116 +346,22 @@ impl Attachments {
             }
         );
         
-        self.textures.push(diffuse_texture);
-        self.texture_dimensions.push(texture_size);
-        self.texture_views.push(diffuse_texture_view);
+        attachments.textures.push(diffuse_texture);
+        attachments.texture_dimensions.push(texture_size);
+        attachments.texture_views.push(diffuse_texture_view);
         //self.samplers.push(diffuse_sampler);
-        self.bind_group_layouts.push(texture_bind_group_layout);
-        self.bind_groups.push(diffuse_bind_group);
+        attachments.bind_group_layouts.push(texture_bind_group_layout);
+        attachments.bind_groups.push(diffuse_bind_group);
     }
-
-}
-
-pub struct DustMain {
-    compute_pipeline: wgpu::ComputePipeline,
-    //img_pipeline: wgpu::RenderPipeline,
-}
-impl DustMain {
-    pub fn new(device: &Device, bind_groups: &Vec<wgpu::BindGroupLayout>, config: &wgpu::SurfaceConfiguration) -> Self {
-        
-        let compute_module = device.create_shader_module(
-            wgpu::ShaderModuleDescriptor { 
-                label: Some("compute ShaderModuleDescriptor"), 
-                source: wgpu::ShaderSource::Wgsl(include_str!("dust.wgsl").into()),
-            }
-        );
-        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Render Pipeline Layout"),
-            bind_group_layouts: &[&bind_groups[0]],
-            push_constant_ranges: &[],
-        });
-        
-        let desc = wgpu::ComputePipelineDescriptor { 
-            label: Some("ComputePipelineDescriptor"), 
-            layout: Some(&layout), 
-            module: &compute_module, 
-            entry_point: "main_image",
-        };
-        let compute_pipeline = device.create_compute_pipeline(&desc);
-        
-        /*
-        let blending = 
-            Some(wgpu::BlendState{
-                color: wgpu::BlendComponent{
-                    src_factor: wgpu::BlendFactor::SrcAlpha,
-                    dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-                    operation: wgpu::BlendOperation::Add,},
-                alpha: wgpu::BlendComponent::OVER
-            });
-        
-        let module_image = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("paint image"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("paint_image.wgsl").into()),
-        });
-        let layout_img =
-        device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Render Pipeline Layout paint image"),
-            bind_group_layouts: &[],
-            push_constant_ranges: &[],
-        });
-        let img_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline paint image"),
-            layout: Some(&layout_img),
-            vertex: wgpu::VertexState {
-                module: &module_image,
-                entry_point: "vtx_main", // 1.
-                buffers: &[
-                    
-                ], // 2.
-            },
-            fragment: Some(wgpu::FragmentState { // 3.
-                module: &module_image,
-                entry_point: "frag_main",
-                targets: &[Some(wgpu::ColorTargetState { // 4.
-                    format: config.format,
-                    blend: blending,
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleStrip, // 1.
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw, // 2.
-                cull_mode: None, //Some(wgpu::Face::Back),
-                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
-                polygon_mode: wgpu::PolygonMode::Fill,
-                // Requires Features::DEPTH_CLIP_CONTROL
-                unclipped_depth: false,
-                // Requires Features::CONSERVATIVE_RASTERIZATION
-                conservative: false,
-            },
-            depth_stencil: None, // 1.
-            multisample: wgpu::MultisampleState::default(), /*{
-                count: 1, // 2.
-                mask: !0, // 3.
-                alpha_to_coverage_enabled: false, // 4.
-            },*/
-            multiview: None, // 5.
-        });
-        */
-        
-        Self {
-            compute_pipeline,
-            //img_pipeline,
-        }
-    }
-}
-impl RenderPlugin for DustMain {
     
-    fn prepare(&self, ) {
     
+    
+    fn prepare(&mut self, device: &Device, queue: &Queue) {
+        self.attachments.prepare(&device, &queue);
     }
-    fn render<'rpass>(&'rpass self, rpass: &mut wgpu::RenderPass<'rpass>, device: &Device, attachments: &mut Attachments) {
+    fn render<'rpass>(&'rpass self, rpass: &mut wgpu::RenderPass<'rpass>, device: &Device) {
+        let attachments = self.attachments;
+        
         let input_f = &[1.0f32, 2.0f32];
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Render Encoder"),

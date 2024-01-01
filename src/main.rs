@@ -38,10 +38,10 @@ pub async fn run() {
     let size = window.as_ref().unwrap().inner_size();
     
     let mut dust = DustRenderer::new("dust label DustRenderer");
-    dust.prepare(&device, &queue);
-    let mut dust_main = DustMain::new(&device, dust.bindgroups(), &surface_configuration);
-    dust.add_plugin("dust_main plugin", Rc::new(dust_main) );
     
+    let mut dust_main = DustMain::new(&device);
+    dust.add_plugin("dust_main plugin", Rc::new(dust_main) );
+    dust.prepare(&device, &queue, &surface_configuration);
     //env_logger::init();
     
     event_loop.run(move |event_main, _, control_flow| { //2: _
