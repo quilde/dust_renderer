@@ -1,4 +1,4 @@
-use dust_renderer::{DustRenderer, DustMain, setup, resize_window};
+use dust_renderer::{DustMain, setup, resize_window};
 
 use tao::{
     event::{Event, WindowEvent, KeyEvent, ElementState, self},
@@ -37,11 +37,12 @@ pub async fn run() {
     
     let size = window.as_ref().unwrap().inner_size();
     
-    let mut dust = DustRenderer::new("dust label DustRenderer");
+    //let mut dust = DustRenderer::new("dust label DustRenderer");
     
-    let mut dust_main = DustMain::new(&device);
-    dust.add_plugin("dust_main plugin", Rc::new(dust_main) );
-    dust.prepare(&device, &queue, &surface_configuration);
+    let mut dust_main = DustMain::new(&device, &queue);
+    dust_main.setup(&device, &queue);
+    //dust.add_plugin("dust_main plugin", Rc::new(dust_main) );
+    //dust.prepare(&device, &queue, &surface_configuration);
     //env_logger::init();
     
     event_loop.run(move |event_main, _, control_flow| { //2: _
@@ -95,8 +96,8 @@ pub async fn run() {
                   }
                 Event::RedrawRequested(window_id)   => {
                     println!("\nredrawing!\n");
-                    
-                    let result = dust.render(&device,&queue, "label", &surface, &surface_configuration);
+                    dust_main.prepare(&device, &queue);
+                    let result = render(&device,&queue, "label", &surface, &surface_configuration, &dust_main);
                     
                     match result {
                         Ok(_) => {}
@@ -114,4 +115,54 @@ pub async fn run() {
             
         });    
     
+}
+
+pub fn render(
+    
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    label: &str,
+    surface: &wgpu::Surface,
+    config: &wgpu::SurfaceConfiguration,
+    dust_main: &DustMain,
+    ) -> Result<(), wgpu::SurfaceError> {
+    let output = surface.get_current_texture()?;
+    let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("Render Encoder"),
+    });
+    
+    
+    
+    {
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Render Pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 0.1,
+                        g: 0.2,
+                        b: 0.3,
+                        a: 0.5,
+                    }),
+                    store: true,
+                    //store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            //timestamp_writes: None,
+            //occlusion_query_set: None,
+        });
+        
+        dust_main.render(&mut render_pass, &device);
+        
+    }
+    
+    
+    queue.submit(std::iter::once(encoder.finish()));
+    output.present();
+
+    Ok(())
 }
