@@ -35,11 +35,11 @@ pub async fn run() {
     
     let (mut window, physical_size, instance, device, mut surface, mut surface_configuration, queue, ) = setup(window_beforemove.unwrap()).await;
     
-    let size = window.as_ref().unwrap().inner_size();
+    let size = glam::UVec2 { x: physical_size.width, y: physical_size.height };
     
     //let mut dust = DustRenderer::new("dust label DustRenderer");
     
-    let mut dust_main = DustMain::new(&device, &queue);
+    let mut dust_main = DustMain::new(&device, &queue, &surface_configuration, size);
     dust_main.setup(&device, &queue);
     //dust.add_plugin("dust_main plugin", Rc::new(dust_main) );
     //dust.prepare(&device, &queue, &surface_configuration);
@@ -70,7 +70,8 @@ pub async fn run() {
                     window_id: _,
                     ..
                 } => {
-                    
+                    resize_window(physical_size, &mut surface_configuration, &device, &mut surface);
+                    dust_main.resize(glam::UVec2 { x: physical_size.width, y: physical_size.height });
                   }
                 Event::WindowEvent {
                     event: WindowEvent::ScaleFactorChanged{new_inner_size,..},
@@ -97,12 +98,14 @@ pub async fn run() {
                 Event::RedrawRequested(window_id)   => {
                     println!("\nredrawing!\n");
                     dust_main.prepare(&device, &queue);
-                    let result = render(&device,&queue, "label", &surface, &surface_configuration, &dust_main);
+                    let size1 = &window.as_ref().unwrap().inner_size();
+                    let size =  glam::UVec2 { x: size1.width, y: size1.height };
+                    let result = render(&device,&queue, "label", &surface, &surface_configuration, &dust_main, &size);
                     
                     match result {
                         Ok(_) => {}
                         // Reconfigure the surface if lost
-                        Err(wgpu::SurfaceError::Lost) => resize_window(size, &mut surface_configuration, &device, &mut surface),
+                        Err(wgpu::SurfaceError::Lost) => resize_window(physical_size, &mut surface_configuration, &device, &mut surface),
                         // The system is out of memory, we should probably quit
                         Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
                         // All other errors (Outdated, Timeout) should be resolved by the next frame
@@ -125,6 +128,7 @@ pub fn render(
     surface: &wgpu::Surface,
     config: &wgpu::SurfaceConfiguration,
     dust_main: &DustMain,
+    size: &glam::UVec2,
     ) -> Result<(), wgpu::SurfaceError> {
     let output = surface.get_current_texture()?;
     let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -132,7 +136,7 @@ pub fn render(
         label: Some("Render Encoder"),
     });
     
-    
+    let mut encoder = dust_main.render_compute(encoder,&device, &queue, *size);
     
     {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

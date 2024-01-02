@@ -5,7 +5,7 @@ use tao::{
     event_loop::{ControlFlow, EventLoop},
     window::{WindowBuilder, Window, WindowId}, dpi::{PhysicalSize, LogicalSize},
 };
-use wgpu::{Device, Queue, SurfaceConfiguration, Surface, Extent3d, Texture, SurfaceTexture, RenderPipeline};
+use wgpu::{Device, Queue, SurfaceConfiguration, Surface, Extent3d, Texture, SurfaceTexture, RenderPipeline, BindGroupLayout, ImageCopyTexture};
 use std::{collections::HashMap, cell::RefCell, borrow::BorrowMut, ops::DerefMut};
 use std::rc::Rc;
 
@@ -27,6 +27,7 @@ struct Attachments {
     samplers: Vec<wgpu::Sampler>,
     bind_group_layouts: Vec<wgpu::BindGroupLayout>,
     bind_groups: Vec<wgpu::BindGroup>,
+    
 }
 impl Attachments {
     pub fn new() -> Self {
@@ -37,6 +38,7 @@ impl Attachments {
             samplers: Vec::new(),
             bind_group_layouts: Vec::new(),
             bind_groups: Vec::new(),
+            
         }
     }
     pub fn prepare(&mut self, device: &Device, queue: &Queue) {
@@ -45,26 +47,31 @@ impl Attachments {
     pub fn bind_groups(&self) -> &Vec<wgpu::BindGroupLayout>{
         &self.bind_group_layouts
     }
+    pub fn push_layouts(&mut self, layout: BindGroupLayout)-> usize {
+        self.bind_group_layouts.push(layout);
+        self.bind_group_layouts.len() - 1 
+    }
 
 }
 
 pub struct DustMain {
     compute_pipeline: wgpu::ComputePipeline,
-    //img_pipeline: wgpu::RenderPipeline,
+    img_pipeline: wgpu::RenderPipeline,
     attachments: Attachments,
 }
 impl DustMain {
-    pub fn new(device: &Device, queue: &Queue) -> Self {
+    pub fn new(device: &Device, queue: &Queue, config: &SurfaceConfiguration, window_size: glam::UVec2) -> Self {
         let mut attachments = Attachments::new();
         
         //let dimensions = glam::Vec2{x: 1.0, y: 1.0};
-        let dimensions = glam::UVec2{x: 1, y: 1};
+        //let dimensions = glam::UVec2{x: 100, y: 100};
+        let dimensions = window_size;
         let texture_size = wgpu::Extent3d {
             width: dimensions.x,
             height: dimensions.y,
             depth_or_array_layers: 1,
         };
-        let diffuse_texture = device.create_texture(
+        let output_texture = device.create_texture(
             &wgpu::TextureDescriptor {
                 
                 size: texture_size,
@@ -72,7 +79,7 @@ impl DustMain {
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
                 format: wgpu::TextureFormat::Rgba8Unorm,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::STORAGE_BINDING,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::COPY_SRC,
                 label: Some("diffuse_texture"),
                 view_formats: &[],
             }
@@ -83,20 +90,20 @@ impl DustMain {
                 data.push(0);
             }
         }
-        let diffuse_rgba = data.as_slice();
+        let output_texture_data = data.as_slice();
         
-        dbg!(&data);
+        //dbg!(&data);
         
         queue.write_texture(
             // Tells wgpu where to copy the pixel data
             wgpu::ImageCopyTexture {
-                texture: &diffuse_texture,
+                texture: &output_texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
             // The actual pixel data
-            diffuse_rgba,
+            output_texture_data,
             // The layout of the texture
             wgpu::ImageDataLayout {
                 offset: 0,
@@ -105,7 +112,7 @@ impl DustMain {
             },
             texture_size,
         );
-        let diffuse_texture_view = diffuse_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let diffuse_texture_view = output_texture.create_view(&wgpu::TextureViewDescriptor::default());
         /*let diffuse_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
@@ -121,7 +128,7 @@ impl DustMain {
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
-                        visibility: wgpu::ShaderStages::COMPUTE | wgpu::ShaderStages::FRAGMENT,
+                        visibility: wgpu::ShaderStages::COMPUTE ,
                         ty: wgpu::BindingType::StorageTexture { 
                             access: wgpu::StorageTextureAccess::WriteOnly, 
                             format: wgpu::TextureFormat::Rgba8Unorm, 
@@ -158,12 +165,14 @@ impl DustMain {
             }
         );
         
-        attachments.textures.push(diffuse_texture);
+        
+        attachments.textures.push(output_texture);
         attachments.texture_dimensions.push(texture_size);
         attachments.texture_views.push(diffuse_texture_view);
         //self.samplers.push(diffuse_sampler);
-        attachments.bind_group_layouts.push(texture_bind_group_layout);
+        let key_output = attachments.push_layouts(texture_bind_group_layout);
         attachments.bind_groups.push(diffuse_bind_group);
+        
         
         let compute_module = device.create_shader_module(
             wgpu::ShaderModuleDescriptor { 
@@ -173,7 +182,7 @@ impl DustMain {
         );
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
-            bind_group_layouts: &[&attachments.bind_group_layouts[0]],
+            bind_group_layouts: &[&attachments.bind_group_layouts[key_output]],
             push_constant_ranges: &[],
         });
         
@@ -185,7 +194,103 @@ impl DustMain {
         };
         let compute_pipeline = device.create_compute_pipeline(&desc);
         
-        /*
+        
+        
+        
+        let paint_texture = device.create_texture(
+            &wgpu::TextureDescriptor {
+                
+                size: texture_size,
+                mip_level_count: 1, // We'll talk about this a little later
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST ,
+                label: Some("paint texture"),
+                view_formats: &[],
+            }
+        );
+        
+        let paint_texture_data = data.as_slice();
+        
+        
+        queue.write_texture(
+            // Tells wgpu where to copy the pixel data
+            wgpu::ImageCopyTexture {
+                texture: &paint_texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            // The actual pixel data
+            paint_texture_data,
+            // The layout of the texture
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * dimensions.x ),
+                rows_per_image: Some(dimensions.y ),
+            },
+            texture_size,
+        );
+        let paint_texture_view = paint_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let paint_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
+        
+        let paint_texture_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture { 
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true }, 
+                            view_dimension: wgpu::TextureViewDimension::D2, 
+                            multisampled: false, 
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                        // This should match the filterable field of the
+                        // corresponding Texture entry above.
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    }, 
+                ],
+                label: Some("paint_texture_bind_group_layout"),
+            });
+            
+        let paint_bind_group = device.create_bind_group(
+            &wgpu::BindGroupDescriptor {
+                layout: &paint_texture_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&paint_texture_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&paint_sampler),
+                    } 
+                ],
+                label: Some("paint_bind_group"),
+            }
+        );
+        
+        attachments.textures.push(paint_texture);
+        attachments.texture_views.push(paint_texture_view);
+        attachments.samplers.push(paint_sampler);
+        let key_paint = attachments.push_layouts(paint_texture_bind_group_layout);
+        attachments.bind_groups.push(paint_bind_group);
+        
         let blending = 
             Some(wgpu::BlendState{
                 color: wgpu::BlendComponent{
@@ -202,7 +307,7 @@ impl DustMain {
         let layout_img =
         device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout paint image"),
-            bind_group_layouts: &[],
+            bind_group_layouts: &[&attachments.bind_group_layouts[key_paint]],
             push_constant_ranges: &[],
         });
         let img_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -244,13 +349,13 @@ impl DustMain {
             },*/
             multiview: None, // 5.
         });
-        */
+        
         
         
         
         Self {
             compute_pipeline,
-            //img_pipeline,
+            img_pipeline,
             attachments,
         }
     }
@@ -262,24 +367,51 @@ impl DustMain {
     }
     
     
-    pub fn prepare(&mut self, device: &Device, queue: &Queue) {
+    pub fn prepare(&mut self, device: &Device, queue: &Queue, ) {
         self.attachments.prepare(&device, &queue);
+    }
+    pub fn render_compute(&self, mut encoder: wgpu::CommandEncoder,device: &wgpu::Device, queue: &wgpu::Queue, window_size: glam::UVec2) -> wgpu::CommandEncoder{
+        
+        {
+            let mut cpass = encoder.begin_compute_pass(&Default::default());
+            cpass.set_pipeline(&self.compute_pipeline);
+            cpass.set_bind_group(0, &self.attachments.bind_groups[0], &[]);
+            cpass.dispatch_workgroups(window_size.x / 16, window_size.y / 16, 1);
+            
+        }
+        encoder.copy_texture_to_texture(
+            ImageCopyTexture {
+                texture: &self.attachments.textures[0],
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            }, 
+            ImageCopyTexture {
+                texture: &self.attachments.textures[1],
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            }, 
+            self.attachments.texture_dimensions[0]
+        );
+        
+        encoder
     }
     pub fn render<'rpass>(&'rpass self, rpass: &mut wgpu::RenderPass<'rpass>, device: &Device) {
         let attachments = &self.attachments;
         
-        let input_f = &[1.0f32, 2.0f32];
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Render Encoder"),
-        });
-        {
-            let mut cpass = encoder.begin_compute_pass(&Default::default());
-            cpass.set_pipeline(&self.compute_pipeline);
-            cpass.set_bind_group(0, &attachments.bind_groups[0], &[]);
-            cpass.dispatch_workgroups(input_f.len() as u32, 1, 1);
-        }
+            rpass.set_pipeline(&self.img_pipeline); 
+            rpass.set_bind_group(0, &attachments.bind_groups[1], &[]);
+            rpass.draw(0..5, 0..1); 
+    
+    }
+    pub fn resize(&mut self, new_size: glam::UVec2) {
+        let mut a = self.attachments.texture_dimensions[0];
+        a.width = new_size.x;
+        a.height = new_size.y;
         
     }
+    
 }
 
 
