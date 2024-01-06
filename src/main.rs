@@ -47,7 +47,7 @@ pub async fn run() {
     
     event_loop.run(move |event_main, _, control_flow| { //2: _
         *control_flow = ControlFlow::Wait;
-        println!("{event_main:?}");
+        //println!("{event_main:?}");
             match event_main {
                 Event::WindowEvent {
                     event: WindowEvent::CloseRequested,
@@ -71,7 +71,7 @@ pub async fn run() {
                     ..
                 } => {
                     resize_window(physical_size, &mut surface_configuration, &device, &mut surface);
-                    dust_main.resize(glam::UVec2 { x: physical_size.width, y: physical_size.height });
+                    dust_main.resize(&device,&queue, glam::UVec2 { x: physical_size.width, y: physical_size.height });
                   }
                 Event::WindowEvent {
                     event: WindowEvent::ScaleFactorChanged{new_inner_size,..},
@@ -88,7 +88,7 @@ pub async fn run() {
                     
                   }
                 Event::DeviceEvent { device_id, event, .. } => {
-                    println!("device event!!!!");
+                    //println!("device event!!!!");
                 }
                 Event::MainEventsCleared => {
                     //if let w = window { //Some(w)}
@@ -96,7 +96,7 @@ pub async fn run() {
                     
                   }
                 Event::RedrawRequested(window_id)   => {
-                    println!("\nredrawing!\n");
+                    println!("redrawing!\n");
                     dust_main.prepare(&device, &queue);
                     let size1 = &window.as_ref().unwrap().inner_size();
                     let size =  glam::UVec2 { x: size1.width, y: size1.height };

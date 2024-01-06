@@ -6,21 +6,30 @@ use tao::{
     window::{WindowBuilder, Window, WindowId}, dpi::{PhysicalSize, LogicalSize},
 };
 use wgpu::{Device, Queue, SurfaceConfiguration, Surface, Extent3d, Texture, SurfaceTexture, RenderPipeline, BindGroupLayout, ImageCopyTexture};
-use std::{collections::HashMap, cell::RefCell, borrow::BorrowMut, ops::DerefMut};
+use std::{collections::HashMap, cell::RefCell, borrow::BorrowMut, ops::DerefMut, num::NonZeroU32};
 use std::rc::Rc;
 
-
+use encase::{
+    ShaderType,
+    
+};
 
 struct RenderQueue {
+    label: &'static str,
     commands: Vec<RenderCommand>,
 }
+
+#[derive(ShaderType)]
 struct RenderCommand {
-    label: &'static str,
+    id: u32,
     command: u32,
-    indices: Vec<u32>,
+
 }
 
 struct Attachments {
+    target: Option<wgpu::Texture>,
+    blit: Option<wgpu::Texture>,
+    target_blit_keys: Option<(usize,usize)>,
     textures: Vec<wgpu::Texture>,
     texture_dimensions: Vec<wgpu::Extent3d>,
     texture_views: Vec<wgpu::TextureView>,
@@ -32,6 +41,9 @@ struct Attachments {
 impl Attachments {
     pub fn new() -> Self {
         Self {
+            target: None,
+            blit: None,
+            target_blit_keys: None,
             textures: Vec::new(),
             texture_dimensions: Vec::new(),
             texture_views: Vec::new(),
@@ -66,113 +78,65 @@ impl DustMain {
         //let dimensions = glam::Vec2{x: 1.0, y: 1.0};
         //let dimensions = glam::UVec2{x: 100, y: 100};
         let dimensions = window_size;
-        let texture_size = wgpu::Extent3d {
-            width: dimensions.x,
-            height: dimensions.y,
-            depth_or_array_layers: 1,
-        };
-        let output_texture = device.create_texture(
-            &wgpu::TextureDescriptor {
-                
-                size: texture_size,
-                mip_level_count: 1, // We'll talk about this a little later
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8Unorm,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::COPY_SRC,
-                label: Some("diffuse_texture"),
-                view_formats: &[],
-            }
-        );
-        let mut data: Vec<u8> = vec![];
-        for _ in 0..dimensions.x {
-            for _ in 0..(dimensions.y * 8) {
-                data.push(0);
-            }
-        }
-        let output_texture_data = data.as_slice();
         
-        //dbg!(&data);
+        let (key_output, key_paint) = Self::create_target_and_blit(&device, &queue, &dimensions, &mut attachments).expect("bad");
         
-        queue.write_texture(
-            // Tells wgpu where to copy the pixel data
-            wgpu::ImageCopyTexture {
-                texture: &output_texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            // The actual pixel data
-            output_texture_data,
-            // The layout of the texture
-            wgpu::ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(4 * dimensions.x ),
-                rows_per_image: Some(dimensions.y ),
-            },
-            texture_size,
-        );
-        let diffuse_texture_view = output_texture.create_view(&wgpu::TextureViewDescriptor::default());
-        /*let diffuse_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::FilterMode::Nearest,
-            ..Default::default()
-        });*/
+        attachments.target_blit_keys = Some((key_output, key_paint));
         
-        let texture_bind_group_layout =
+        let mut byte_buffer: Vec<u8> = Vec::new();
+        
+        let mut buffer = encase::StorageBuffer::new(&mut byte_buffer);
+        
+        buffer.write(&RenderCommand {
+            id: 0,
+            command: 0,
+        }).unwrap();
+        
+        let rq_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
                         visibility: wgpu::ShaderStages::COMPUTE ,
-                        ty: wgpu::BindingType::StorageTexture { 
-                            access: wgpu::StorageTextureAccess::WriteOnly, 
-                            format: wgpu::TextureFormat::Rgba8Unorm, 
-                            view_dimension: wgpu::TextureViewDimension::D2, 
+                        ty: wgpu::BindingType::Buffer { 
+                            ty: wgpu::BufferBindingType::Storage { 
+                                read_only: true 
+                            }, 
+                            has_dynamic_offset: false, 
+                            min_binding_size: None 
                         },
                         count: None,
                     },
-                    /*wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::COMPUTE | wgpu::ShaderStages::FRAGMENT,
-                        // This should match the filterable field of the
-                        // corresponding Texture entry above.
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    }, */
                 ],
-                label: Some("texture_bind_group_layout"),
+                label: Some("rq bindgroup layout"),
             });
-            
-        let diffuse_bind_group = device.create_bind_group(
+        
+        let rq_buffer = device.create_buffer(
+            &wgpu::BufferDescriptor {
+                label: Some("BufferDescriptor rq_buffer"),
+                size: byte_buffer.len() as u64,
+                usage: wgpu::BufferUsages::STORAGE,
+                mapped_at_creation: false,
+            }
+        );
+        let rq_bind_group = device.create_bind_group(
             &wgpu::BindGroupDescriptor {
-                layout: &texture_bind_group_layout,
+                layout: &rq_layout,
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&diffuse_texture_view),
+                        resource: wgpu::BindingResource::Buffer(
+                            wgpu::BufferBinding {
+                                buffer: &rq_buffer,
+                                offset: 0,
+                                size:  None,
+                            }
+                        ),
                     },
-                    /* wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&diffuse_sampler),
-                    } */
                 ],
                 label: Some("diffuse_bind_group"),
             }
         );
-        
-        
-        attachments.textures.push(output_texture);
-        attachments.texture_dimensions.push(texture_size);
-        attachments.texture_views.push(diffuse_texture_view);
-        //self.samplers.push(diffuse_sampler);
-        let key_output = attachments.push_layouts(texture_bind_group_layout);
-        attachments.bind_groups.push(diffuse_bind_group);
-        
         
         let compute_module = device.create_shader_module(
             wgpu::ShaderModuleDescriptor { 
@@ -194,7 +158,172 @@ impl DustMain {
         };
         let compute_pipeline = device.create_compute_pipeline(&desc);
         
+
         
+        let blending = 
+            Some(wgpu::BlendState{
+                color: wgpu::BlendComponent{
+                    src_factor: wgpu::BlendFactor::SrcAlpha,
+                    dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                    operation: wgpu::BlendOperation::Add,},
+                alpha: wgpu::BlendComponent::OVER
+            });
+        
+        let module_image = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("paint image"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("paint_image.wgsl").into()),
+        });
+        let layout_img =
+        device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Render Pipeline Layout paint image"),
+            bind_group_layouts: &[&attachments.bind_group_layouts[key_paint]],
+            push_constant_ranges: &[],
+        });
+        let img_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Render Pipeline paint image"),
+            layout: Some(&layout_img),
+            vertex: wgpu::VertexState {
+                module: &module_image,
+                entry_point: "vtx_main", // 1.
+                buffers: &[
+                    
+                ], // 2.
+            },
+            fragment: Some(wgpu::FragmentState { // 3.
+                module: &module_image,
+                entry_point: "frag_main",
+                targets: &[Some(wgpu::ColorTargetState { // 4.
+                    format: config.format,
+                    blend: blending,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleStrip, // 1.
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw, // 2.
+                cull_mode: None, //Some(wgpu::Face::Back),
+                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
+                polygon_mode: wgpu::PolygonMode::Fill,
+                // Requires Features::DEPTH_CLIP_CONTROL
+                unclipped_depth: false,
+                // Requires Features::CONSERVATIVE_RASTERIZATION
+                conservative: false,
+            },
+            depth_stencil: None, // 1.
+            multisample: wgpu::MultisampleState::default(), /*{
+                count: 1, // 2.
+                mask: !0, // 3.
+                alpha_to_coverage_enabled: false, // 4.
+            },*/
+            multiview: None, // 5.
+        });
+        
+        
+        
+        
+        Self {
+            compute_pipeline,
+            img_pipeline,
+            attachments,
+        }
+    }
+    
+    pub fn create_target_and_blit(device: &wgpu::Device, queue: &wgpu::Queue, dimensions: &glam::UVec2, attachments: &mut Attachments, ) -> Option<(usize, usize)> {
+        
+        
+        let texture_size = wgpu::Extent3d {
+            width: dimensions.x,
+            height: dimensions.y,
+            depth_or_array_layers: 1,
+        };
+        let output_texture = device.create_texture(
+            &wgpu::TextureDescriptor {
+                
+                size: texture_size,
+                mip_level_count: 1, // We'll talk about this a little later
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::COPY_SRC,
+                label: Some("diffuse_texture"),
+                view_formats: &[],
+            }
+        );
+        let mut data: Vec<u8> = vec![];
+        
+        fill_image(&mut data, &dimensions);
+        let output_texture_data = data.as_slice();
+
+        
+        queue.write_texture(
+            // Tells wgpu where to copy the pixel data
+            wgpu::ImageCopyTexture {
+                texture: &output_texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            // The actual pixel data
+            output_texture_data,
+            // The layout of the texture
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * dimensions.x ),
+                rows_per_image: Some(dimensions.y ),
+            },
+            texture_size,
+        );
+        let diffuse_texture_view = output_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        
+        let texture_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::COMPUTE ,
+                        ty: wgpu::BindingType::StorageTexture { 
+                            access: wgpu::StorageTextureAccess::WriteOnly, 
+                            format: wgpu::TextureFormat::Rgba8Unorm, 
+                            view_dimension: wgpu::TextureViewDimension::D2, 
+                        },
+                        count: None,
+                    },
+                ],
+                label: Some("texture_bind_group_layout"),
+            });
+            
+        let diffuse_bind_group = device.create_bind_group(
+            &wgpu::BindGroupDescriptor {
+                layout: &texture_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&diffuse_texture_view),
+                    },
+                ],
+                label: Some("diffuse_bind_group"),
+            }
+        );
+        
+                
+        attachments.target = Some(output_texture);
+        //attachments.textures.push(output_texture);
+        attachments.texture_dimensions.pop();
+        attachments.texture_dimensions.push(texture_size);
+        
+        attachments.texture_views.pop();
+        attachments.texture_views.pop();
+        attachments.bind_groups.pop();
+        attachments.bind_groups.pop();
+        
+        
+        attachments.texture_views.push(diffuse_texture_view);
+        //self.samplers.push(diffuse_sampler);
+        
+        
+        attachments.bind_groups.push(diffuse_bind_group);
         
         
         let paint_texture = device.create_texture(
@@ -285,79 +414,30 @@ impl DustMain {
             }
         );
         
-        attachments.textures.push(paint_texture);
+                
+        attachments.blit = Some(paint_texture);
+        //attachments.textures.push(paint_texture);
         attachments.texture_views.push(paint_texture_view);
         attachments.samplers.push(paint_sampler);
-        let key_paint = attachments.push_layouts(paint_texture_bind_group_layout);
+        
+        
+        
         attachments.bind_groups.push(paint_bind_group);
         
-        let blending = 
-            Some(wgpu::BlendState{
-                color: wgpu::BlendComponent{
-                    src_factor: wgpu::BlendFactor::SrcAlpha,
-                    dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-                    operation: wgpu::BlendOperation::Add,},
-                alpha: wgpu::BlendComponent::OVER
-            });
-        
-        let module_image = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("paint image"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("paint_image.wgsl").into()),
-        });
-        let layout_img =
-        device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Render Pipeline Layout paint image"),
-            bind_group_layouts: &[&attachments.bind_group_layouts[key_paint]],
-            push_constant_ranges: &[],
-        });
-        let img_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline paint image"),
-            layout: Some(&layout_img),
-            vertex: wgpu::VertexState {
-                module: &module_image,
-                entry_point: "vtx_main", // 1.
-                buffers: &[
-                    
-                ], // 2.
+        match attachments.target_blit_keys {
+            Some(a) => {
+                attachments.bind_group_layouts[a.0] = texture_bind_group_layout;
+                attachments.bind_group_layouts[a.1] = paint_texture_bind_group_layout;
+                return  None;
             },
-            fragment: Some(wgpu::FragmentState { // 3.
-                module: &module_image,
-                entry_point: "frag_main",
-                targets: &[Some(wgpu::ColorTargetState { // 4.
-                    format: config.format,
-                    blend: blending,
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleStrip, // 1.
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw, // 2.
-                cull_mode: None, //Some(wgpu::Face::Back),
-                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
-                polygon_mode: wgpu::PolygonMode::Fill,
-                // Requires Features::DEPTH_CLIP_CONTROL
-                unclipped_depth: false,
-                // Requires Features::CONSERVATIVE_RASTERIZATION
-                conservative: false,
+            None => {
+                let key_output = attachments.push_layouts(texture_bind_group_layout);
+                let key_paint = attachments.push_layouts(paint_texture_bind_group_layout);
+                return Some((key_output, key_paint));
             },
-            depth_stencil: None, // 1.
-            multisample: wgpu::MultisampleState::default(), /*{
-                count: 1, // 2.
-                mask: !0, // 3.
-                alpha_to_coverage_enabled: false, // 4.
-            },*/
-            multiview: None, // 5.
-        });
-        
-        
-        
-        
-        Self {
-            compute_pipeline,
-            img_pipeline,
-            attachments,
         }
+        
+        
     }
     
     pub fn setup(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
@@ -376,18 +456,19 @@ impl DustMain {
             let mut cpass = encoder.begin_compute_pass(&Default::default());
             cpass.set_pipeline(&self.compute_pipeline);
             cpass.set_bind_group(0, &self.attachments.bind_groups[0], &[]);
-            cpass.dispatch_workgroups(window_size.x / 16, window_size.y / 16, 1);
+            cpass.dispatch_workgroups((window_size.x / 16) + 1, (window_size.y / 16) + 1, 1);
             
         }
+        dbg!(&self.attachments.target.as_ref().unwrap().size());
         encoder.copy_texture_to_texture(
             ImageCopyTexture {
-                texture: &self.attachments.textures[0],
+                texture: &self.attachments.target.as_ref().unwrap(),
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             }, 
             ImageCopyTexture {
-                texture: &self.attachments.textures[1],
+                texture: &self.attachments.blit.as_ref().unwrap(),
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
@@ -405,13 +486,15 @@ impl DustMain {
             rpass.draw(0..5, 0..1); 
     
     }
-    pub fn resize(&mut self, new_size: glam::UVec2) {
-        let mut a = self.attachments.texture_dimensions[0];
-        a.width = new_size.x;
-        a.height = new_size.y;
-        
+    pub fn resize(&mut self,device: &Device, queue: &Queue, new_size: glam::UVec2) {
+        let _ = Self::create_target_and_blit(
+            device, 
+            queue, 
+            &new_size, 
+            &mut self.attachments, 
+        );
+        dbg!(new_size);
     }
-    
 }
 
 
@@ -481,3 +564,10 @@ pub fn resize_window(new_size: tao::dpi::PhysicalSize<u32>, surface_configuratio
     }
 }
 
+fn fill_image(data: &mut Vec<u8>, dimensions: &glam::UVec2) {
+    for _ in 0..dimensions.x {
+            for _ in 0..(dimensions.y * 8) {
+                data.push(0);
+            }
+        }
+}
