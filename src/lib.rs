@@ -26,6 +26,7 @@ struct RenderCommand {
 
 }
 
+#[derive(Debug)]
 struct Attachments {
     target: Option<wgpu::Texture>,
     blit: Option<wgpu::Texture>,
@@ -362,7 +363,11 @@ impl DustMain {
             texture_size,
         );
         let paint_texture_view = paint_texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let paint_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        
+        let paint_sampler: wgpu::Sampler;
+        
+        if attachments.target_blit_keys == None{
+        paint_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
@@ -371,6 +376,10 @@ impl DustMain {
             mipmap_filter: wgpu::FilterMode::Nearest,
             ..Default::default()
         });
+        
+        attachments.samplers.push(paint_sampler);
+        }
+        
         
         let paint_texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -407,7 +416,7 @@ impl DustMain {
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&paint_sampler),
+                        resource: wgpu::BindingResource::Sampler(&attachments.samplers[0]),
                     } 
                 ],
                 label: Some("paint_bind_group"),
@@ -418,7 +427,7 @@ impl DustMain {
         attachments.blit = Some(paint_texture);
         //attachments.textures.push(paint_texture);
         attachments.texture_views.push(paint_texture_view);
-        attachments.samplers.push(paint_sampler);
+        
         
         
         
@@ -428,11 +437,13 @@ impl DustMain {
             Some(a) => {
                 attachments.bind_group_layouts[a.0] = texture_bind_group_layout;
                 attachments.bind_group_layouts[a.1] = paint_texture_bind_group_layout;
+                dbg!(attachments);
                 return  None;
             },
             None => {
                 let key_output = attachments.push_layouts(texture_bind_group_layout);
                 let key_paint = attachments.push_layouts(paint_texture_bind_group_layout);
+                dbg!(attachments);
                 return Some((key_output, key_paint));
             },
         }
