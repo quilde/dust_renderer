@@ -27,7 +27,7 @@ struct RenderCommand {
 }
 
 #[derive(Debug)]
-struct Attachments {
+pub struct Attachments {
     target: Option<wgpu::Texture>,
     blit: Option<wgpu::Texture>,
     target_blit_keys: Option<(usize,usize)>,
@@ -251,30 +251,8 @@ impl DustMain {
                 view_formats: &[],
             }
         );
-        let mut data: Vec<u8> = vec![];
         
-        fill_image(&mut data, &dimensions);
-        let output_texture_data = data.as_slice();
-
         
-        queue.write_texture(
-            // Tells wgpu where to copy the pixel data
-            wgpu::ImageCopyTexture {
-                texture: &output_texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            // The actual pixel data
-            output_texture_data,
-            // The layout of the texture
-            wgpu::ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(4 * dimensions.x ),
-                rows_per_image: Some(dimensions.y ),
-            },
-            texture_size,
-        );
         let diffuse_texture_view = output_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         
@@ -341,27 +319,7 @@ impl DustMain {
             }
         );
         
-        let paint_texture_data = data.as_slice();
         
-        
-        queue.write_texture(
-            // Tells wgpu where to copy the pixel data
-            wgpu::ImageCopyTexture {
-                texture: &paint_texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            // The actual pixel data
-            paint_texture_data,
-            // The layout of the texture
-            wgpu::ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(4 * dimensions.x ),
-                rows_per_image: Some(dimensions.y ),
-            },
-            texture_size,
-        );
         let paint_texture_view = paint_texture.create_view(&wgpu::TextureViewDescriptor::default());
         
         let paint_sampler: wgpu::Sampler;
@@ -437,13 +395,13 @@ impl DustMain {
             Some(a) => {
                 attachments.bind_group_layouts[a.0] = texture_bind_group_layout;
                 attachments.bind_group_layouts[a.1] = paint_texture_bind_group_layout;
-                dbg!(attachments);
+                //dbg!(attachments);
                 return  None;
             },
             None => {
                 let key_output = attachments.push_layouts(texture_bind_group_layout);
                 let key_paint = attachments.push_layouts(paint_texture_bind_group_layout);
-                dbg!(attachments);
+                //dbg!(attachments);
                 return Some((key_output, key_paint));
             },
         }
@@ -461,7 +419,8 @@ impl DustMain {
     pub fn prepare(&mut self, device: &Device, queue: &Queue, ) {
         self.attachments.prepare(&device, &queue);
     }
-    pub fn render_compute(&self, mut encoder: wgpu::CommandEncoder,device: &wgpu::Device, queue: &wgpu::Queue, window_size: glam::UVec2) -> wgpu::CommandEncoder{
+    pub fn render_compute(&mut self, mut encoder: wgpu::CommandEncoder,device: &wgpu::Device, queue: &wgpu::Queue, window_size: glam::UVec2) -> wgpu::CommandEncoder{
+        
         
         {
             let mut cpass = encoder.begin_compute_pass(&Default::default());
@@ -470,7 +429,7 @@ impl DustMain {
             cpass.dispatch_workgroups((window_size.x / 16) + 1, (window_size.y / 16) + 1, 1);
             
         }
-        dbg!(&self.attachments.target.as_ref().unwrap().size());
+        //dbg!(&self.attachments.target.as_ref().unwrap().size());
         encoder.copy_texture_to_texture(
             ImageCopyTexture {
                 texture: &self.attachments.target.as_ref().unwrap(),
@@ -504,7 +463,7 @@ impl DustMain {
             &new_size, 
             &mut self.attachments, 
         );
-        dbg!(new_size);
+        //dbg!(new_size);
     }
 }
 
@@ -573,12 +532,4 @@ pub fn resize_window(new_size: tao::dpi::PhysicalSize<u32>, surface_configuratio
         surface_configuration.height = new_size.height;
         surface.configure(device, surface_configuration);
     }
-}
-
-fn fill_image(data: &mut Vec<u8>, dimensions: &glam::UVec2) {
-    for _ in 0..dimensions.x {
-            for _ in 0..(dimensions.y * 8) {
-                data.push(0);
-            }
-        }
 }

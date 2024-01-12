@@ -42,3 +42,30 @@ impl RenderElement {
 fn insert_render_element(&mut self, render_element: RenderElement) -> u64 {
         return self.tree.insert(render_element).unwrap();
     }
+    
+    
+
+
+
+/*
+        let paint_texture_data = data.as_slice();
+        
+        queue.write_texture(
+            // Tells wgpu where to copy the pixel data
+            wgpu::ImageCopyTexture {
+                texture: &paint_texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            // The actual pixel data
+            paint_texture_data,
+            // The layout of the texture
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * dimensions.x ),
+                rows_per_image: Some(dimensions.y ),
+            },
+            texture_size,
+        );
+        */

@@ -100,7 +100,7 @@ pub async fn run() {
                     dust_main.prepare(&device, &queue);
                     let size1 = &window.as_ref().unwrap().inner_size();
                     let size =  glam::UVec2 { x: size1.width, y: size1.height };
-                    let result = render(&device,&queue, "label", &surface, &surface_configuration, &dust_main, &size);
+                    let result = render(&device,&queue, "label", &surface, &surface_configuration, &mut dust_main, &size);
                     
                     match result {
                         Ok(_) => {}
@@ -127,7 +127,7 @@ pub fn render(
     label: &str,
     surface: &wgpu::Surface,
     config: &wgpu::SurfaceConfiguration,
-    dust_main: &DustMain,
+    dust_main: &mut DustMain,
     size: &glam::UVec2,
     ) -> Result<(), wgpu::SurfaceError> {
     let output = surface.get_current_texture()?;
