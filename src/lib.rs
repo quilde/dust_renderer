@@ -60,9 +60,13 @@ impl Attachments {
     pub fn bind_groups(&self) -> &Vec<wgpu::BindGroupLayout>{
         &self.bind_group_layouts
     }
-    pub fn push_layouts(&mut self, layout: BindGroupLayout)-> usize {
+    pub fn push_layout(&mut self, layout: wgpu::BindGroupLayout)-> usize {
         self.bind_group_layouts.push(layout);
         self.bind_group_layouts.len() - 1 
+    }
+    pub fn push_bindgroup(&mut self, group: wgpu::BindGroup)-> usize {
+        self.bind_groups.push(group);
+        self.bind_groups.len() - 1 
     }
 
 }
@@ -80,18 +84,25 @@ impl DustMain {
         //let dimensions = glam::UVec2{x: 100, y: 100};
         let dimensions = window_size;
         
-        let (key_output, key_paint) = Self::create_target_and_blit(&device, &queue, &dimensions, &mut attachments).expect("bad");
+        let (key_output, key_blit) = Self::create_target_and_blit(&device, &queue, &dimensions, &mut attachments).expect("bad");
         
-        attachments.target_blit_keys = Some((key_output, key_paint));
+        attachments.target_blit_keys = Some((key_output, key_blit));
         
         let mut byte_buffer: Vec<u8> = Vec::new();
         
         let mut buffer = encase::StorageBuffer::new(&mut byte_buffer);
         
-        buffer.write(&RenderCommand {
+        buffer.write(&vec![
+            &RenderCommand {
             id: 0,
             command: 0,
-        }).unwrap();
+        },
+        &RenderCommand {
+            id: 1,
+            command: 0,
+        },
+        ]).unwrap();
+        dbg!(byte_buffer.len());
         
         let rq_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -104,7 +115,7 @@ impl DustMain {
                                 read_only: true 
                             }, 
                             has_dynamic_offset: false, 
-                            min_binding_size: None 
+                            min_binding_size: Some(std::num::NonZeroU64::new(byte_buffer.len() as u64).unwrap()),
                         },
                         count: None,
                     },
@@ -116,7 +127,7 @@ impl DustMain {
             &wgpu::BufferDescriptor {
                 label: Some("BufferDescriptor rq_buffer"),
                 size: byte_buffer.len() as u64,
-                usage: wgpu::BufferUsages::STORAGE,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             }
         );
@@ -126,18 +137,21 @@ impl DustMain {
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
-                        resource: wgpu::BindingResource::Buffer(
-                            wgpu::BufferBinding {
-                                buffer: &rq_buffer,
-                                offset: 0,
-                                size:  None,
-                            }
-                        ),
+                        resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                            buffer: &rq_buffer,
+                            offset: 0,
+                            size: None,
+                        }), //rq_buffer.as_entire_binding()
                     },
                 ],
                 label: Some("diffuse_bind_group"),
             }
         );
+        
+        queue.write_buffer(&rq_buffer, 0, byte_buffer.as_slice());
+        
+        let rq_key = attachments.push_layout(rq_layout);
+        let rq_group_key = attachments.push_bindgroup(rq_bind_group);
         
         let compute_module = device.create_shader_module(
             wgpu::ShaderModuleDescriptor { 
@@ -145,9 +159,11 @@ impl DustMain {
                 source: wgpu::ShaderSource::Wgsl(include_str!("dust.wgsl").into()),
             }
         );
+        dbg!(&attachments.bind_group_layouts);
+        dbg!(&rq_key);
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
-            bind_group_layouts: &[&attachments.bind_group_layouts[key_output]],
+            bind_group_layouts: &[&attachments.bind_group_layouts[key_output], &attachments.bind_group_layouts[rq_key]],
             push_constant_ranges: &[],
         });
         
@@ -177,7 +193,7 @@ impl DustMain {
         let layout_img =
         device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout paint image"),
-            bind_group_layouts: &[&attachments.bind_group_layouts[key_paint]],
+            bind_group_layouts: &[&attachments.bind_group_layouts[key_blit]],
             push_constant_ranges: &[],
         });
         let img_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -221,8 +237,6 @@ impl DustMain {
         });
         
         
-        
-        
         Self {
             compute_pipeline,
             img_pipeline,
@@ -232,13 +246,13 @@ impl DustMain {
     
     pub fn create_target_and_blit(device: &wgpu::Device, queue: &wgpu::Queue, dimensions: &glam::UVec2, attachments: &mut Attachments, ) -> Option<(usize, usize)> {
         
-        
         let texture_size = wgpu::Extent3d {
             width: dimensions.x,
             height: dimensions.y,
             depth_or_array_layers: 1,
         };
-        let output_texture = device.create_texture(
+        
+        let target_texture = device.create_texture(
             &wgpu::TextureDescriptor {
                 
                 size: texture_size,
@@ -247,16 +261,13 @@ impl DustMain {
                 dimension: wgpu::TextureDimension::D2,
                 format: wgpu::TextureFormat::Rgba8Unorm,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::COPY_SRC,
-                label: Some("diffuse_texture"),
+                label: Some("target_texture"),
                 view_formats: &[],
             }
         );
-        
-        
-        let diffuse_texture_view = output_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let target_texture_view = target_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        
-        let texture_bind_group_layout =
+        let target_bindgroup_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
@@ -273,39 +284,23 @@ impl DustMain {
                 label: Some("texture_bind_group_layout"),
             });
             
-        let diffuse_bind_group = device.create_bind_group(
+        let target_bindgroup = device.create_bind_group(
             &wgpu::BindGroupDescriptor {
-                layout: &texture_bind_group_layout,
+                layout: &target_bindgroup_layout,
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&diffuse_texture_view),
+                        resource: wgpu::BindingResource::TextureView(&target_texture_view),
                     },
                 ],
                 label: Some("diffuse_bind_group"),
             }
         );
         
-                
-        attachments.target = Some(output_texture);
-        //attachments.textures.push(output_texture);
-        attachments.texture_dimensions.pop();
-        attachments.texture_dimensions.push(texture_size);
-        
-        attachments.texture_views.pop();
-        attachments.texture_views.pop();
-        attachments.bind_groups.pop();
-        attachments.bind_groups.pop();
         
         
-        attachments.texture_views.push(diffuse_texture_view);
-        //self.samplers.push(diffuse_sampler);
         
-        
-        attachments.bind_groups.push(diffuse_bind_group);
-        
-        
-        let paint_texture = device.create_texture(
+        let blit_texture = device.create_texture(
             &wgpu::TextureDescriptor {
                 
                 size: texture_size,
@@ -318,28 +313,25 @@ impl DustMain {
                 view_formats: &[],
             }
         );
+        let blit_texture_view = blit_texture.create_view(&wgpu::TextureViewDescriptor::default());
         
-        
-        let paint_texture_view = paint_texture.create_view(&wgpu::TextureViewDescriptor::default());
-        
-        let paint_sampler: wgpu::Sampler;
+        let blit_sampler: wgpu::Sampler;
         
         if attachments.target_blit_keys == None{
-        paint_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::FilterMode::Nearest,
-            ..Default::default()
-        });
-        
-        attachments.samplers.push(paint_sampler);
+            blit_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+                address_mode_u: wgpu::AddressMode::ClampToEdge,
+                address_mode_v: wgpu::AddressMode::ClampToEdge,
+                address_mode_w: wgpu::AddressMode::ClampToEdge,
+                mag_filter: wgpu::FilterMode::Linear,
+                min_filter: wgpu::FilterMode::Nearest,
+                mipmap_filter: wgpu::FilterMode::Nearest,
+                ..Default::default()
+            });
+            
+            attachments.samplers.push(blit_sampler);
         }
         
-        
-        let paint_texture_bind_group_layout =
+        let blit_bindgroup_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
@@ -364,13 +356,13 @@ impl DustMain {
                 label: Some("paint_texture_bind_group_layout"),
             });
             
-        let paint_bind_group = device.create_bind_group(
+        let blit_bindgroup = device.create_bind_group(
             &wgpu::BindGroupDescriptor {
-                layout: &paint_texture_bind_group_layout,
+                layout: &blit_bindgroup_layout,
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&paint_texture_view),
+                        resource: wgpu::BindingResource::TextureView(&blit_texture_view),
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
@@ -380,33 +372,46 @@ impl DustMain {
                 label: Some("paint_bind_group"),
             }
         );
-        
                 
-        attachments.blit = Some(paint_texture);
-        //attachments.textures.push(paint_texture);
-        attachments.texture_views.push(paint_texture_view);
+        attachments.target = Some(target_texture);
+        attachments.blit = Some(blit_texture);
         
+        if attachments.texture_dimensions.len() == 0 {
+            attachments.texture_dimensions.push(texture_size);
+        } else {
+            attachments.texture_dimensions[0] = texture_size;
+        }
         
+        if attachments.texture_views.len() == 0 {
+            attachments.texture_views.push(target_texture_view);
+            attachments.texture_views.push(blit_texture_view);
+        } else {
+            attachments.texture_views[0] = target_texture_view;
+            attachments.texture_views[1] = blit_texture_view;
+        }
         
-        
-        attachments.bind_groups.push(paint_bind_group);
+        if attachments.bind_groups.len() == 0 {
+            attachments.bind_groups.push(target_bindgroup);
+            attachments.bind_groups.push(blit_bindgroup);
+        } else {
+            attachments.bind_groups[0] = target_bindgroup;
+            attachments.bind_groups[1] = blit_bindgroup;
+        }
         
         match attachments.target_blit_keys {
             Some(a) => {
-                attachments.bind_group_layouts[a.0] = texture_bind_group_layout;
-                attachments.bind_group_layouts[a.1] = paint_texture_bind_group_layout;
+                attachments.bind_group_layouts[a.0] = target_bindgroup_layout;
+                attachments.bind_group_layouts[a.1] = blit_bindgroup_layout;
                 //dbg!(attachments);
                 return  None;
             },
             None => {
-                let key_output = attachments.push_layouts(texture_bind_group_layout);
-                let key_paint = attachments.push_layouts(paint_texture_bind_group_layout);
+                let key_output = attachments.push_layout(target_bindgroup_layout);
+                let key_paint = attachments.push_layout(blit_bindgroup_layout);
                 //dbg!(attachments);
                 return Some((key_output, key_paint));
             },
-        }
-        
-        
+        }        
     }
     
     pub fn setup(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
@@ -426,6 +431,7 @@ impl DustMain {
             let mut cpass = encoder.begin_compute_pass(&Default::default());
             cpass.set_pipeline(&self.compute_pipeline);
             cpass.set_bind_group(0, &self.attachments.bind_groups[0], &[]);
+            cpass.set_bind_group(1, &self.attachments.bind_groups[2], &[]);
             cpass.dispatch_workgroups((window_size.x / 16) + 1, (window_size.y / 16) + 1, 1);
             
         }
