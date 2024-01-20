@@ -5,7 +5,7 @@ use tao::{
     event_loop::{ControlFlow, EventLoop},
     window::{WindowBuilder, Window, WindowId}, dpi::{PhysicalSize, LogicalSize},
 };
-use wgpu::{Device, Queue, SurfaceConfiguration, Surface, Extent3d, Texture, SurfaceTexture, RenderPipeline, BindGroupLayout, ImageCopyTexture};
+use wgpu::{Device, Queue, SurfaceConfiguration, Surface, Extent3d, Texture, SurfaceTexture, RenderPipeline, BindGroupLayout, ImageCopyTexture, BindGroupEntry};
 use std::{collections::HashMap, cell::RefCell, borrow::BorrowMut, ops::DerefMut, num::NonZeroU32};
 use std::rc::Rc;
 
@@ -14,12 +14,14 @@ use encase::{
     
 };
 
+mod gpu_vec;
+
 struct RenderQueue {
     label: &'static str,
     commands: Vec<RenderCommand>,
 }
 
-#[derive(ShaderType)]
+#[derive(ShaderType, Clone, Copy)]
 struct RenderCommand {
     id: u32,
     command: u32,
@@ -88,67 +90,37 @@ impl DustMain {
         
         attachments.target_blit_keys = Some((key_output, key_blit));
         
-        let mut byte_buffer: Vec<u8> = Vec::new();
-        
-        let mut buffer = encase::StorageBuffer::new(&mut byte_buffer);
-        
-        buffer.write(&vec![
-            &RenderCommand {
+        let rq = gpu_vec::GPUVec::<RenderCommand>::new_from(device, queue, "label gpuvec", vec![
+            RenderCommand {
             id: 0,
             command: 0,
         },
-        &RenderCommand {
+        RenderCommand {
             id: 1,
             command: 0,
         },
-        ]).unwrap();
-        dbg!(byte_buffer.len());
+        ]);
+        
+        
         
         let rq_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::COMPUTE ,
-                        ty: wgpu::BindingType::Buffer { 
-                            ty: wgpu::BufferBindingType::Storage { 
-                                read_only: true 
-                            }, 
-                            has_dynamic_offset: false, 
-                            min_binding_size: Some(std::num::NonZeroU64::new(byte_buffer.len() as u64).unwrap()),
-                        },
-                        count: None,
-                    },
+                    gpu_vec::GPUVec::<RenderCommand>::bind_group_layout_entry(0),
                 ],
                 label: Some("rq bindgroup layout"),
             });
         
-        let rq_buffer = device.create_buffer(
-            &wgpu::BufferDescriptor {
-                label: Some("BufferDescriptor rq_buffer"),
-                size: byte_buffer.len() as u64,
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            }
-        );
         let rq_bind_group = device.create_bind_group(
             &wgpu::BindGroupDescriptor {
                 layout: &rq_layout,
                 entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                            buffer: &rq_buffer,
-                            offset: 0,
-                            size: None,
-                        }), //rq_buffer.as_entire_binding()
-                    },
+                    rq.bind_group_entry(0),
                 ],
                 label: Some("diffuse_bind_group"),
             }
         );
         
-        queue.write_buffer(&rq_buffer, 0, byte_buffer.as_slice());
         
         let rq_key = attachments.push_layout(rq_layout);
         let rq_group_key = attachments.push_bindgroup(rq_bind_group);
@@ -463,13 +435,16 @@ impl DustMain {
     
     }
     pub fn resize(&mut self,device: &Device, queue: &Queue, new_size: glam::UVec2) {
-        let _ = Self::create_target_and_blit(
-            device, 
-            queue, 
-            &new_size, 
-            &mut self.attachments, 
-        );
-        //dbg!(new_size);
+        if new_size.x != 0{
+            let _ = Self::create_target_and_blit(
+                device, 
+                queue, 
+                &new_size, 
+                &mut self.attachments, 
+            );
+            //dbg!(new_size);
+        }
+        
     }
 }
 

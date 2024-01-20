@@ -18,9 +18,9 @@ fn main_image(@builtin(global_invocation_id) id: vec3u) {
     var d = sdCircle(fragCoord, 100.);
     
     if d < 0.0 {
-        col = vec3f(0.,0.,0.);
+        col = vec3f(f32(render_queue[0].id),0.,0.);
     } else {
-        col = vec3f(1.,1.,1.);
+        col = vec3f(f32(render_queue[1].id),1.,1.);
     }
 
     // Convert from gamma-encoded to linear colour space

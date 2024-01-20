@@ -1,6 +1,7 @@
 use std::mem::size_of;
 use std::ops::Index;
 use wgpu::*;
+use encase::{StorageBuffer, ShaderSize, private::WriteInto};
 
 pub struct GPUVec<T: Copy> {
     buffer: wgpu::Buffer,
@@ -9,96 +10,70 @@ pub struct GPUVec<T: Copy> {
     label: String,
 }
 
-impl<T: Copy> GPUVec<T> {
-    pub fn new(device: &wgpu::Device, capacity: usize, label: &str) -> Self {
+impl<T: Copy + ShaderSize + WriteInto> GPUVec<T> {
+    
+    pub fn new_from(device: &wgpu::Device, queue: &wgpu::Queue, label: &str, from: Vec<T> ) -> Self {
+        //let staticfrom: &Vec<&T> = &from.iter().map(|i|{i}).collect();
+        let mut byte_buffer: Vec<u8> = Vec::new();
+        
+        let mut storage_buffer = encase::StorageBuffer::new(&mut byte_buffer);
+        storage_buffer.write(
+            &from
+        ).unwrap();
+        
         let buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some(label),
-            size: (size_of::<T>() * capacity) as u64,
+            size: byte_buffer.len() as u64,
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-
-        Self {
-            buffer,
-            capacity,
-            data: vec![],
-            label: label.into(),
-        }
-    }
-
-    pub fn new_uniforms(device: &wgpu::Device, label: &str) -> Self {
-        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some(label),
-            size: size_of::<T>() as _,
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
+        
+        queue.write_buffer(&buffer, 0, &byte_buffer.as_slice());
+        
+        
         Self {
             buffer,
             capacity: 1,
-            data: vec![],
+            data: from,
             label: label.into(),
         }
     }
-
-     pub fn new_uniforms_size(device: &wgpu::Device, label: &str, size: u64 ) -> Self {
-        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some(label),
-            size,
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        Self {
-            buffer,
-            capacity: 1,
-            data: vec![],
-            label: label.into(),
-        }
-    }
+    
     
     /// Updates the underlying gpu buffer with self.data.
     ///
     /// We'd like to write directly to the mapped buffer, but that seemed
     /// tricky with wgpu.
     pub fn update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) -> bool {
-        let realloc = self.data.len() > self.capacity;
+        let mut byte_buffer: Vec<u8> = Vec::new();
+        
+        let mut storage_buffer = encase::StorageBuffer::new(&mut byte_buffer);
+        storage_buffer.write(
+            &self.data
+        ).unwrap();
+        
+        
+        let realloc = byte_buffer.len() > self.capacity;
         if realloc {
-            self.capacity = self.data.len().next_power_of_two();
+            self.capacity = byte_buffer.len().next_power_of_two();
             self.buffer = device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some(self.label.as_str()),
-                size: (size_of::<T>() * self.capacity) as u64,
+                size: byte_buffer.len() as u64,
                 usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             });
         }
 
-        let sz = self.data.len() * size_of::<T>();
-        queue.write_buffer(&self.buffer, 0, unsafe {
+        //let sz = self.data.len() * size_of::<T>();
+        /*queue.write_buffer(&self.buffer, 0, unsafe {
             std::slice::from_raw_parts_mut(self.data[..].as_ptr() as *mut u8, sz)
-        });
+        }); */
+        
+        queue.write_buffer(&self.buffer, 0, &byte_buffer.as_slice());
+        
         realloc
     }
     
-    pub fn update_wsize(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, size: usize) -> bool {
-        let realloc = self.data.len() > self.capacity;
-        if realloc {
-            self.capacity = self.data.len().next_power_of_two();
-            self.buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some(self.label.as_str()),
-                size: (size * self.capacity) as u64,
-                usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
-        }
-
-        let sz = self.data.len() * size;
-        queue.write_buffer(&self.buffer, 0, unsafe {
-            std::slice::from_raw_parts_mut(self.data[..].as_ptr() as *mut u8, sz)
-        });
-        realloc
-    }
 
     pub fn bind_group_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
         wgpu::BindGroupLayoutEntry {
@@ -107,7 +82,7 @@ impl<T: Copy> GPUVec<T> {
             ty: wgpu::BindingType::Buffer {
                 ty: wgpu::BufferBindingType::Storage { read_only: true },
                 has_dynamic_offset: false,
-                min_binding_size: Some(std::num::NonZeroU64::new(size_of::<T>() as u64).unwrap()),
+                min_binding_size: None,
             },
             count: None,
         }
