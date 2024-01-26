@@ -44,9 +44,11 @@ pub async fn run() {
     //dust.add_plugin("dust_main plugin", Rc::new(dust_main) );
     //dust.prepare(&device, &queue, &surface_configuration);
     //env_logger::init();
+    let mut now = std::time::Instant::now();
     
     event_loop.run(move |event_main, _, control_flow| { //2: _
         *control_flow = ControlFlow::Wait;
+        
         //println!("{event_main:?}");
             match event_main {
                 Event::WindowEvent {
@@ -93,6 +95,10 @@ pub async fn run() {
                 Event::MainEventsCleared => {
                     //if let w = window { //Some(w)}
                       //windows[&window_id].request_redraw();
+                    if let Some(w) = &window {
+                        window.as_ref().unwrap().request_redraw();
+                    }
+                    
                     
                   }
                 Event::RedrawRequested(window_id)   => {
@@ -111,6 +117,14 @@ pub async fn run() {
                         // All other errors (Outdated, Timeout) should be resolved by the next frame
                         Err(e) => eprintln!("{:?}", e),
                     } 
+                    
+                    let fps = if now.elapsed().as_secs() != 0 {
+            1 / now.elapsed().as_secs()
+        } else {
+            u64::MIN
+        };
+        print!("{}ms  {}   ", now.elapsed().as_millis(), fps);
+        now = std::time::Instant::now();
                   }
                        
                   _ => (),

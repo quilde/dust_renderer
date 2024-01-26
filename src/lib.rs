@@ -14,19 +14,43 @@ use encase::{
     
 };
 
-mod gpu_vec;
+mod wwrapers;
 
 struct RenderQueue {
     label: &'static str,
     commands: Vec<RenderCommand>,
 }
 
-#[derive(ShaderType, Clone, Copy)]
+#[derive(ShaderType, Clone, Copy, Debug)]
 struct RenderCommand {
     id: u32,
     command: u32,
 
 }
+
+#[derive(Debug)]
+pub struct Attachments2 { 
+    rq: Option<wwrapers::GPUVec<RenderCommand>>,
+    rq_group: Option<wwrapers::GroupWrap>,
+    target: Option<wwrapers::StorageTextureWrap>,
+    target_group: Option<wwrapers::GroupWrap>,
+    blit: Option<wwrapers::TextureWrap>,
+    blit_group: Option<wwrapers::GroupWrap>,
+}
+impl Attachments2 {
+    pub fn new() -> Self {
+        Self {
+            rq: None,
+            rq_group: None,
+            target: None,
+            target_group: None,
+            blit: None,
+            blit_group: None,
+            
+        }
+    }
+}
+
 
 #[derive(Debug)]
 pub struct Attachments {
@@ -54,6 +78,8 @@ impl Attachments {
             bind_group_layouts: Vec::new(),
             bind_groups: Vec::new(),
             
+            
+            
         }
     }
     pub fn prepare(&mut self, device: &Device, queue: &Queue) {
@@ -75,8 +101,9 @@ impl Attachments {
 
 pub struct DustMain {
     compute_pipeline: wgpu::ComputePipeline,
-    img_pipeline: wgpu::RenderPipeline,
+    blit_pipeline: wgpu::RenderPipeline,
     attachments: Attachments,
+    attachments2: Attachments2,
 }
 impl DustMain {
     pub fn new(device: &Device, queue: &Queue, config: &SurfaceConfiguration, window_size: glam::UVec2) -> Self {
@@ -86,11 +113,30 @@ impl DustMain {
         //let dimensions = glam::UVec2{x: 100, y: 100};
         let dimensions = window_size;
         
-        let (key_output, key_blit) = Self::create_target_and_blit(&device, &queue, &dimensions, &mut attachments).expect("bad");
+        //let (key_output, key_blit) = Self::create_target_and_blit(&device, &queue, &dimensions, &mut attachments).expect("bad");
         
-        attachments.target_blit_keys = Some((key_output, key_blit));
+        //attachments.target_blit_keys = Some((key_output, key_blit));
         
-        let rq = gpu_vec::GPUVec::<RenderCommand>::new_from(device, queue, "label gpuvec", vec![
+        let target = wwrapers::StorageTextureWrap::new(device, queue, &dimensions);
+        let blit = wwrapers::TextureWrap::new(device, queue, &dimensions);
+        let sampler = wwrapers::SamplerWrap::new(device, queue);
+        
+        let target_group = wwrapers::GroupWrap::new(device, queue, vec![
+            (wwrapers::StorageTextureWrap::bind_group_layout_entry(0), target.bind_group_entry(0)),
+        ], "label_layout target", "label_group target");
+        
+        dbg!(&blit);
+        let blit_group = wwrapers::GroupWrap::new(device, queue, vec![
+            (wwrapers::TextureWrap::bind_group_layout_entry(0), blit.bind_group_entry(0)),
+            (wwrapers::SamplerWrap::bind_group_layout_entry(1), sampler.bind_group_entry(1)),
+        ], "label_layout blit", "label_group blit");
+        
+        
+        
+        let mut attachments2 = Attachments2::new();
+        
+        
+        let rq = wwrapers::GPUVec::<RenderCommand>::new_from(device, queue, "label gpuvec", vec![
             RenderCommand {
             id: 0,
             command: 0,
@@ -101,29 +147,17 @@ impl DustMain {
         },
         ]);
         
-        
-        
-        let rq_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[
-                    gpu_vec::GPUVec::<RenderCommand>::bind_group_layout_entry(0),
-                ],
-                label: Some("rq bindgroup layout"),
-            });
-        
-        let rq_bind_group = device.create_bind_group(
-            &wgpu::BindGroupDescriptor {
-                layout: &rq_layout,
-                entries: &[
-                    rq.bind_group_entry(0),
-                ],
-                label: Some("diffuse_bind_group"),
-            }
+        let rq_group = wwrapers::GroupWrap::new(
+            device, 
+            queue, 
+            vec![
+            (wwrapers::GPUVec::<RenderCommand>::bind_group_layout_entry(0),rq.bind_group_entry(0)),
+            ],
+            "rq bindgroup layout", "rq bindgroup",
         );
         
+
         
-        let rq_key = attachments.push_layout(rq_layout);
-        let rq_group_key = attachments.push_bindgroup(rq_bind_group);
         
         let compute_module = device.create_shader_module(
             wgpu::ShaderModuleDescriptor { 
@@ -132,10 +166,10 @@ impl DustMain {
             }
         );
         dbg!(&attachments.bind_group_layouts);
-        dbg!(&rq_key);
+        
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
-            bind_group_layouts: &[&attachments.bind_group_layouts[key_output], &attachments.bind_group_layouts[rq_key]],
+            bind_group_layouts: &[&target_group.layout, &rq_group.layout],
             push_constant_ranges: &[],
         });
         
@@ -165,7 +199,7 @@ impl DustMain {
         let layout_img =
         device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout paint image"),
-            bind_group_layouts: &[&attachments.bind_group_layouts[key_blit]],
+            bind_group_layouts: &[&blit_group.layout],
             push_constant_ranges: &[],
         });
         let img_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -208,193 +242,32 @@ impl DustMain {
             multiview: None, // 5.
         });
         
+                attachments2.rq = Some(rq);
+        attachments2.rq_group = Some(rq_group);
+        attachments2.target = Some(target);
+        attachments2.target_group = Some(target_group);
+        attachments2.blit = Some(blit);
+        attachments2.blit_group = Some(blit_group);
         
         Self {
             compute_pipeline,
-            img_pipeline,
+            blit_pipeline: img_pipeline,
             attachments,
+            attachments2,
         }
     }
     
-    pub fn create_target_and_blit(device: &wgpu::Device, queue: &wgpu::Queue, dimensions: &glam::UVec2, attachments: &mut Attachments, ) -> Option<(usize, usize)> {
-        
-        let texture_size = wgpu::Extent3d {
-            width: dimensions.x,
-            height: dimensions.y,
-            depth_or_array_layers: 1,
-        };
-        
-        let target_texture = device.create_texture(
-            &wgpu::TextureDescriptor {
-                
-                size: texture_size,
-                mip_level_count: 1, // We'll talk about this a little later
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8Unorm,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::COPY_SRC,
-                label: Some("target_texture"),
-                view_formats: &[],
-            }
-        );
-        let target_texture_view = target_texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-        let target_bindgroup_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::COMPUTE ,
-                        ty: wgpu::BindingType::StorageTexture { 
-                            access: wgpu::StorageTextureAccess::WriteOnly, 
-                            format: wgpu::TextureFormat::Rgba8Unorm, 
-                            view_dimension: wgpu::TextureViewDimension::D2, 
-                        },
-                        count: None,
-                    },
-                ],
-                label: Some("texture_bind_group_layout"),
-            });
-            
-        let target_bindgroup = device.create_bind_group(
-            &wgpu::BindGroupDescriptor {
-                layout: &target_bindgroup_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&target_texture_view),
-                    },
-                ],
-                label: Some("diffuse_bind_group"),
-            }
-        );
-        
-        
-        
-        
-        let blit_texture = device.create_texture(
-            &wgpu::TextureDescriptor {
-                
-                size: texture_size,
-                mip_level_count: 1, // We'll talk about this a little later
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8Unorm,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST ,
-                label: Some("paint texture"),
-                view_formats: &[],
-            }
-        );
-        let blit_texture_view = blit_texture.create_view(&wgpu::TextureViewDescriptor::default());
-        
-        let blit_sampler: wgpu::Sampler;
-        
-        if attachments.target_blit_keys == None{
-            blit_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-                address_mode_u: wgpu::AddressMode::ClampToEdge,
-                address_mode_v: wgpu::AddressMode::ClampToEdge,
-                address_mode_w: wgpu::AddressMode::ClampToEdge,
-                mag_filter: wgpu::FilterMode::Linear,
-                min_filter: wgpu::FilterMode::Nearest,
-                mipmap_filter: wgpu::FilterMode::Nearest,
-                ..Default::default()
-            });
-            
-            attachments.samplers.push(blit_sampler);
-        }
-        
-        let blit_bindgroup_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture { 
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true }, 
-                            view_dimension: wgpu::TextureViewDimension::D2, 
-                            multisampled: false, 
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                        // This should match the filterable field of the
-                        // corresponding Texture entry above.
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    }, 
-                ],
-                label: Some("paint_texture_bind_group_layout"),
-            });
-            
-        let blit_bindgroup = device.create_bind_group(
-            &wgpu::BindGroupDescriptor {
-                layout: &blit_bindgroup_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&blit_texture_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&attachments.samplers[0]),
-                    } 
-                ],
-                label: Some("paint_bind_group"),
-            }
-        );
-                
-        attachments.target = Some(target_texture);
-        attachments.blit = Some(blit_texture);
-        
-        if attachments.texture_dimensions.len() == 0 {
-            attachments.texture_dimensions.push(texture_size);
-        } else {
-            attachments.texture_dimensions[0] = texture_size;
-        }
-        
-        if attachments.texture_views.len() == 0 {
-            attachments.texture_views.push(target_texture_view);
-            attachments.texture_views.push(blit_texture_view);
-        } else {
-            attachments.texture_views[0] = target_texture_view;
-            attachments.texture_views[1] = blit_texture_view;
-        }
-        
-        if attachments.bind_groups.len() == 0 {
-            attachments.bind_groups.push(target_bindgroup);
-            attachments.bind_groups.push(blit_bindgroup);
-        } else {
-            attachments.bind_groups[0] = target_bindgroup;
-            attachments.bind_groups[1] = blit_bindgroup;
-        }
-        
-        match attachments.target_blit_keys {
-            Some(a) => {
-                attachments.bind_group_layouts[a.0] = target_bindgroup_layout;
-                attachments.bind_group_layouts[a.1] = blit_bindgroup_layout;
-                //dbg!(attachments);
-                return  None;
-            },
-            None => {
-                let key_output = attachments.push_layout(target_bindgroup_layout);
-                let key_paint = attachments.push_layout(blit_bindgroup_layout);
-                //dbg!(attachments);
-                return Some((key_output, key_paint));
-            },
-        }        
-    }
+    
     
     pub fn setup(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
-        let mut attachments = &mut self.attachments;
+        
         
         
     }
     
     
     pub fn prepare(&mut self, device: &Device, queue: &Queue, ) {
-        self.attachments.prepare(&device, &queue);
+        
     }
     pub fn render_compute(&mut self, mut encoder: wgpu::CommandEncoder,device: &wgpu::Device, queue: &wgpu::Queue, window_size: glam::UVec2) -> wgpu::CommandEncoder{
         
@@ -402,47 +275,58 @@ impl DustMain {
         {
             let mut cpass = encoder.begin_compute_pass(&Default::default());
             cpass.set_pipeline(&self.compute_pipeline);
-            cpass.set_bind_group(0, &self.attachments.bind_groups[0], &[]);
-            cpass.set_bind_group(1, &self.attachments.bind_groups[2], &[]);
+            cpass.set_bind_group(0, &self.attachments2.target_group.as_ref().unwrap().bind_group, &[]);
+            cpass.set_bind_group(1, &self.attachments2.rq_group.as_ref().unwrap().bind_group, &[]);
             cpass.dispatch_workgroups((window_size.x / 16) + 1, (window_size.y / 16) + 1, 1);
             
         }
         //dbg!(&self.attachments.target.as_ref().unwrap().size());
         encoder.copy_texture_to_texture(
             ImageCopyTexture {
-                texture: &self.attachments.target.as_ref().unwrap(),
+                texture: &self.attachments2.target.as_ref().unwrap().texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             }, 
             ImageCopyTexture {
-                texture: &self.attachments.blit.as_ref().unwrap(),
+                texture: &self.attachments2.blit.as_ref().unwrap().texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             }, 
-            self.attachments.texture_dimensions[0]
+            self.attachments2.target.as_ref().unwrap().texture_size,
         );
         
         encoder
     }
     pub fn render<'rpass>(&'rpass self, rpass: &mut wgpu::RenderPass<'rpass>, device: &Device) {
-        let attachments = &self.attachments;
         
-            rpass.set_pipeline(&self.img_pipeline); 
-            rpass.set_bind_group(0, &attachments.bind_groups[1], &[]);
+        
+            rpass.set_pipeline(&self.blit_pipeline); 
+            rpass.set_bind_group(0, &self.attachments2.blit_group.as_ref().unwrap().bind_group, &[]);
             rpass.draw(0..5, 0..1); 
     
     }
     pub fn resize(&mut self,device: &Device, queue: &Queue, new_size: glam::UVec2) {
+        
         if new_size.x != 0{
-            let _ = Self::create_target_and_blit(
-                device, 
-                queue, 
-                &new_size, 
-                &mut self.attachments, 
-            );
-            //dbg!(new_size);
+            self.attachments2.target.as_mut().unwrap().update(device, queue, &new_size);
+            self.attachments2.blit.as_mut().unwrap().update(device, queue, &new_size);
+            
+            let target = self.attachments2.target.unwrap();
+            let blit = self.attachments2.blit.unwrap();
+            
+            let target_group = wwrapers::GroupWrap::new(device, queue, vec![
+                (wwrapers::StorageTextureWrap::bind_group_layout_entry(0), target.bind_group_entry(0)),
+            ], "label_layout target", "label_group target");
+            
+            let blit_group = wwrapers::GroupWrap::new(device, queue, vec![
+                (wwrapers::TextureWrap::bind_group_layout_entry(0), blit.bind_group_entry(0)),
+                (wwrapers::SamplerWrap::bind_group_layout_entry(1), sampler.bind_group_entry(1)),
+            ], "label_layout blit", "label_group blit");
+            
+            self.attachments2.target_group = Some(target_group);
+            self.attachments2.blit_group = Some(blit_group);
         }
         
     }
