@@ -23,10 +23,19 @@ pub async fn run() {
     
     
     let event_loop = EventLoop::new();
-    let mut window_beforemove = Some(
+    let window_beforemove = Some(
         WindowBuilder::new()
         .with_decorations(true)
         .with_inner_size(tao::dpi::LogicalSize::new(300.0, 300.0))
+        .with_min_inner_size(tao::dpi::LogicalSize::new(200.0, 200.0))
+        .with_transparent(true)
+        .build(&event_loop)
+        .unwrap()
+    );
+    let window_beforemove2 = Some(
+        WindowBuilder::new()
+        .with_decorations(true)
+        .with_inner_size(tao::dpi::LogicalSize::new(600.0, 600.0))
         .with_min_inner_size(tao::dpi::LogicalSize::new(200.0, 200.0))
         .with_transparent(true)
         .build(&event_loop)
