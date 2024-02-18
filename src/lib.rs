@@ -1,8 +1,8 @@
 //cd Documents\nils\Programming\rust\gui\penna\dust_renderer
 
+use encase::rts_array::Length;
 use std::rc::Rc;
 use std::{borrow::BorrowMut, cell::RefCell, collections::HashMap, num::NonZeroU32, ops::DerefMut};
-use encase::rts_array::Length;
 use tao::{
     dpi::{LogicalSize, PhysicalSize},
     event::{self, ElementState, Event, KeyEvent, WindowEvent},
@@ -376,9 +376,8 @@ pub async fn setup<
     W: raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle,
 >(
     windows: Vec<&W>,
-    sizes: Vec<glam::UVec2>
+    sizes: Vec<glam::UVec2>,
 ) -> (
-    wgpu::Instance,
     Vec<&W>,
     Vec<wgpu::Surface>,
     Vec<wgpu::SurfaceConfiguration>,
@@ -389,7 +388,7 @@ pub async fn setup<
 
     let instance_desc = wgpu::InstanceDescriptor::default();
     let instance = wgpu::Instance::new(instance_desc);
-    
+
     let mut surfaces = Vec::new();
     let mut configs = Vec::new();
     let mut devices = Vec::new();
@@ -443,14 +442,78 @@ pub async fn setup<
             view_formats: vec![],
         };
         surface.configure(&device, &config);
-        
+
         surfaces.push(surface);
         devices.push(device);
         queues.push(queue);
         configs.push(config);
     }
 
-    (instance, windows, surfaces,  configs, devices,  queues)
+    (windows, surfaces, configs, devices, queues)
+}
+
+pub async fn setup_single<
+    W: raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle,
+>(
+    window: &W,
+    size: glam::UVec2,
+) -> (
+    wgpu::Device,
+    wgpu::Queue,
+    wgpu::Surface,
+    wgpu::SurfaceConfiguration,
+) {
+    let instance_desc = wgpu::InstanceDescriptor::default();
+    let instance = wgpu::Instance::new(instance_desc);
+    // Safety
+    // The surface needs to live as long as the window that created it.
+    // State owns the window so this should be safe.
+    let surface = unsafe { instance.create_surface(&window) }.unwrap();
+
+    let adapter = instance
+        .request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::default(),
+            compatible_surface: Some(&surface),
+            force_fallback_adapter: false,
+        })
+        .await
+        .unwrap();
+
+    let (device, queue) = adapter
+        .request_device(
+            &wgpu::DeviceDescriptor {
+                label: None,
+                features: wgpu::Features::default(),
+                limits: wgpu::Limits::default(),
+            },
+            None,
+            //trace_dir.ok().as_ref().map(std::path::Path::new),
+        )
+        .await
+        .expect("Unable to find a suitable GPU adapter!");
+
+    let surface_caps = surface.get_capabilities(&adapter);
+    // Shader code in this tutorial assumes an sRGB surface texture. Using a different
+    // one will result all the colors coming out darker. If you want to support non
+    // sRGB surfaces, you'll need to account for that when drawing to the frame.
+    let surface_format = surface_caps
+        .formats
+        .iter()
+        .copied()
+        .find(|f| f.is_srgb())
+        .unwrap_or(surface_caps.formats[0]);
+    let config = wgpu::SurfaceConfiguration {
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        format: surface_format,
+        width: size.x,
+        height: size.y,
+        present_mode: surface_caps.present_modes[0],
+        alpha_mode: surface_caps.alpha_modes[0],
+        view_formats: vec![],
+    };
+    surface.configure(&device, &config);
+
+    (device, queue, surface, config)
 }
 
 pub fn resize_window(
@@ -465,4 +528,55 @@ pub fn resize_window(
         surface_configuration.height = new_size.height;
         surface.configure(device, surface_configuration);
     }
+}
+
+
+pub fn render(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    label: &str,
+    surface: &wgpu::Surface,
+    config: &wgpu::SurfaceConfiguration,
+    dust_main: &mut DustMain,
+    size: &glam::UVec2,
+) -> Result<(), wgpu::SurfaceError> {
+    let output = surface.get_current_texture()?;
+    let view = output
+        .texture
+        .create_view(&wgpu::TextureViewDescriptor::default());
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("Render Encoder"),
+    });
+
+    let mut encoder = dust_main.render_compute(encoder, &device, &queue, *size);
+
+    {
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Render Pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 0.1,
+                        g: 0.2,
+                        b: 0.3,
+                        a: 0.5,
+                    }),
+                    store: true,
+                    //store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            //timestamp_writes: None,
+            //occlusion_query_set: None,
+        });
+
+        dust_main.render(&mut render_pass, &device);
+    }
+
+    queue.submit(std::iter::once(encoder.finish()));
+    output.present();
+
+    Ok(())
 }
