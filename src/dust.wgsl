@@ -43,6 +43,8 @@ struct RenderCommand {
     command: u32,
 }
 
+@group(2) @binding(0) var<storage> transforms: array<mat3x3<f32>>;
+
 fn sdCircle(p: vec2<f32>, r: f32) -> f32
 {
     return length(p) - r;
