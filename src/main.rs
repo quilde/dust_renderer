@@ -90,6 +90,9 @@ pub async fn run() {
                         y: physical_size.height,
                     },
                 );
+                if let Some(w) = &window {
+                    window.as_ref().unwrap().request_redraw();
+                }
             }
             Event::WindowEvent {
                 event: WindowEvent::ScaleFactorChanged { new_inner_size, .. },
@@ -125,7 +128,7 @@ pub async fn run() {
             }
             Event::RedrawRequested(window_id) => {
                 println!("redrawing!\n");
-                dust_main.prepare(&device, &queue);
+                dust_main.prepare_render(&device, &queue);
                 let size1 = &window.as_ref().unwrap().inner_size();
                 let size = glam::UVec2 {
                     x: size1.width,

@@ -1,27 +1,15 @@
-//cd Documents\nils\Programming\rust\gui\penna\dust_renderer
 
-use encase::rts_array::Length;
-use glam::Vec3A;
-use std::rc::Rc;
-use std::{borrow::BorrowMut, cell::RefCell, collections::HashMap, num::NonZeroU32, ops::DerefMut};
-use tao::{
-    dpi::{LogicalSize, PhysicalSize},
-    event::{self, ElementState, Event, KeyEvent, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
-    window::{Window, WindowBuilder, WindowId},
-};
-use wgpu::core::present::ConfigureSurfaceError;
-use wgpu::hal::auxil::db::intel::DEVICE_SKY_LAKE_MASK;
+
+
 use wgpu::{
-    BindGroupEntry, BindGroupLayout, Device, Extent3d, ImageCopyTexture, Queue, RenderPipeline,
-    Surface, SurfaceConfiguration, SurfaceTexture, Texture,
+    Device, ImageCopyTexture, Queue, 
+    Surface, SurfaceConfiguration,
 };
 
 use encase::ShaderType;
 
-use crate::wburrito::GroupWrap;
-
 mod wburrito;
+mod render_element;
 
 struct RenderQueue {
     label: &'static str,
@@ -301,7 +289,7 @@ impl DustMain {
 
     pub fn setup(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {}
 
-    pub fn prepare(&mut self, device: &Device, queue: &Queue, ) {
+    pub fn prepare_render(&mut self, device: &Device, queue: &Queue, ) {
         
     }
     
