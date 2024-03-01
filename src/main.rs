@@ -12,6 +12,8 @@ use wgpu::{Device, Surface, SurfaceConfiguration};
 use std::collections::HashMap;
 use std::rc::Rc;
 
+mod render_element;
+
 fn main() {
     pollster::block_on(run());
 }
@@ -128,7 +130,7 @@ pub async fn run() {
             }
             Event::RedrawRequested(window_id) => {
                 println!("redrawing!\n");
-                dust_main.prepare_render(&device, &queue);
+                dust_main.prepare_render(&device, &queue, dust_renderer::test_op());
                 let size1 = &window.as_ref().unwrap().inner_size();
                 let size = glam::UVec2 {
                     x: size1.width,

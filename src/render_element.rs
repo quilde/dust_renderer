@@ -1,4 +1,4 @@
-
+pub(self)
 
 struct RenderElement {
     
@@ -7,21 +7,19 @@ impl RenderElement {
     
 }
 
-enum Operation {
+#[derive(PartialEq)]
+pub enum Operation {
     Overwrite{
         commands: Vec<Operation>
     },
     Blend {
         layers: Vec<Operation>,
+    },
+    Circle {
+        radius: f32,
+        transform: glam::Mat3,
     }
 }
 
-fn test() {
-    let elements = Operation::Blend {
-        layers: vec![
-            Operation::Overwrite{
-                commands: Vec::new(),
-            }
-        ],
-    };
-}
+
+

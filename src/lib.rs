@@ -2,8 +2,7 @@
 
 
 use wgpu::{
-    Device, ImageCopyTexture, Queue, 
-    Surface, SurfaceConfiguration,
+    Device, ImageCopyTexture, Operations, Queue, Surface, SurfaceConfiguration
 };
 
 use encase::ShaderType;
@@ -11,13 +10,21 @@ use encase::ShaderType;
 mod wburrito;
 mod render_element;
 
-struct RenderQueue {
+pub struct RenderQueue {
     label: &'static str,
-    commands: Vec<RenderCommand>,
+    pub commands: Vec<RenderCommand>,
+}
+impl RenderQueue {
+    fn new(label: &'static str) -> Self {
+        Self {
+            label,
+            commands: Vec::new(),
+        }
+    }
 }
 
 #[derive(ShaderType, Clone, Copy, Debug)]
-struct RenderCommand {
+pub struct RenderCommand {
     id: u32,
     command: u32,
 }
@@ -289,7 +296,14 @@ impl DustMain {
 
     pub fn setup(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {}
 
-    pub fn prepare_render(&mut self, device: &Device, queue: &Queue, ) {
+    pub fn prepare_render(&mut self, device: &Device, queue: &Queue, op: render_element::Operation) {
+
+        let rq = to_queue(op);
+
+        let rq_buffer = self.attachments2.rq.as_mut().unwrap();
+        rq_buffer.clear();
+        rq.commands.iter().for_each(| c| rq_buffer.push(*c));
+        rq_buffer.update(device, queue);
         
     }
     
@@ -349,21 +363,18 @@ impl DustMain {
         rpass.draw(0..5, 0..1);
     }
     pub fn resize(&mut self, device: &Device, queue: &Queue, new_size: glam::UVec2) {
-        if new_size.x != 0 {
-            self.attachments2
-                .target
-                .as_mut()
-                .unwrap()
+        let target = self.attachments2.target.as_mut().unwrap();
+        let blit = self.attachments2.blit.as_mut().unwrap();
+        let sampler = self.attachments2.sampler.as_ref().unwrap();
+        if new_size.x != 0 && new_size.y != 0  {
+
+            target
+
                 .update(device, queue, &new_size);
-            self.attachments2
-                .blit
-                .as_mut()
-                .unwrap()
+            blit
                 .update(device, queue, &new_size);
 
-            let target = self.attachments2.target.as_ref().unwrap();
-            let blit = self.attachments2.blit.as_ref().unwrap();
-            let sampler = self.attachments2.sampler.as_ref().unwrap();
+            
 
             let target_group = wburrito::GroupWrap::new(
                 device,
@@ -606,4 +617,57 @@ pub fn render(
     output.present();
 
     Ok(())
+}
+
+
+
+pub fn to_queue(op: render_element::Operation) -> RenderQueue{
+    let mut render_queue = RenderQueue::new("label rq");
+    match_op(&op, &mut render_queue.commands);
+    render_queue
+}
+fn match_op(op: &render_element::Operation, v: &mut Vec<RenderCommand>) {
+    match op {
+        render_element::Operation::Blend {layers}=> {
+            for l in layers {
+                match_op(l, v);
+            }
+            if layers.is_empty() {
+                v.push(RenderCommand{
+                    id: 0,
+                    command: 0,
+                });
+            }
+        },
+        render_element::Operation::Overwrite{commands} => {
+            for c in commands {
+                match_op(c, v);
+            }
+            if commands.is_empty() {
+                v.push(RenderCommand{
+                    id: 0,
+                    command: 1,
+                });
+            }
+        },
+        render_element::Operation::Circle{radius, transform} => {
+
+            v.push(RenderCommand{
+                id: 0,
+                command: 2,
+            });
+            
+        },
+    }
+}
+
+
+pub fn test_op()-> render_element::Operation {
+    render_element::Operation::Blend {
+        layers: vec![
+            render_element::Operation::Overwrite{
+                commands: Vec::new(),
+            }
+        ],
+    }
 }

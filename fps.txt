@@ -1,0 +1,976 @@
+[src\lib.rs:133] &blit = TextureWrap {
+    texture_size: Extent3d {
+        width: 300,
+        height: 300,
+        depth_or_array_layers: 1,
+    },
+    texture: Texture {
+        context: Context {
+            type: "Native",
+        },
+        id: ObjectId {
+            id: Some(
+                2305843013508661249,
+            ),
+        },
+        data: Any { .. },
+        owned: true,
+        descriptor: TextureDescriptor {
+            label: None,
+            size: Extent3d {
+                width: 300,
+                height: 300,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: D2,
+            format: Rgba8Unorm,
+            usage: TextureUsages(
+                COPY_DST | TEXTURE_BINDING,
+            ),
+            view_formats: [],
+        },
+    },
+    texture_view: TextureView {
+        context: Context {
+            type: "Native",
+        },
+        id: ObjectId {
+            id: Some(
+                2305843013508661249,
+            ),
+        },
+        data: Any { .. },
+    },
+}
+[src\lib.rs:198] &attachments.bind_group_layouts = []
+redrawing!
+
+48ms  0   redrawing!
+
+77ms  0   redrawing!
+
+2ms  0   redrawing!
+
+6ms  0   redrawing!
+
+7ms  0   redrawing!
+
+2ms  0   redrawing!
+
+6ms  0   redrawing!
+
+3ms  0   redrawing!
+
+5ms  0   redrawing!
+
+2ms  0   redrawing!
+
+6ms  0   redrawing!
+
+3ms  0   redrawing!
+
+4ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+3ms  0   redrawing!
+
+4ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+3ms  0   redrawing!
+
+4ms  0   redrawing!
+
+2ms  0   redrawing!
+
+6ms  0   redrawing!
+
+4ms  0   redrawing!
+
+3ms  0   redrawing!
+
+6ms  0   redrawing!
+
+1ms  0   redrawing!
+
+5ms  0   redrawing!
+
+2ms  0   redrawing!
+
+6ms  0   redrawing!
+
+1ms  0   redrawing!
+
+6ms  0   redrawing!
+
+2ms  0   redrawing!
+
+4ms  0   redrawing!
+
+2ms  0   redrawing!
+
+7ms  0   redrawing!
+
+2ms  0   redrawing!
+
+3ms  0   redrawing!
+
+1ms  0   redrawing!
+
+3ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+2ms  0   redrawing!
+
+6ms  0   redrawing!
+
+3ms  0   redrawing!
+
+4ms  0   redrawing!
+
+2ms  0   redrawing!
+
+56ms  0   redrawing!
+
+2ms  0   redrawing!
+
+9ms  0   redrawing!
+
+9ms  0   redrawing!
+
+2ms  0   redrawing!
+
+7ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+7ms  0   redrawing!
+
+2ms  0   redrawing!
+
+8ms  0   redrawing!
+
+8ms  0   redrawing!
+
+2ms  0   redrawing!
+
+4ms  0   redrawing!
+
+2ms  0   redrawing!
+
+6ms  0   redrawing!
+
+7ms  0   redrawing!
+
+17ms  0   redrawing!
+
+10ms  0   redrawing!
+
+6ms  0   redrawing!
+
+7ms  0   redrawing!
+
+257ms  0   redrawing!
+
+2ms  0   redrawing!
+
+1861ms  1   redrawing!
+
+13ms  0   redrawing!
+
+3ms  0   redrawing!
+
+123ms  0   redrawing!
+
+11ms  0   redrawing!
+
+8ms  0   redrawing!
+
+2ms  0   redrawing!
+
+6ms  0   redrawing!
+
+11ms  0   redrawing!
+
+3ms  0   redrawing!
+
+95ms  0   redrawing!
+
+3ms  0   redrawing!
+
+8ms  0   redrawing!
+
+2ms  0   redrawing!
+
+6ms  0   redrawing!
+
+6ms  0   redrawing!
+
+2ms  0   redrawing!
+
+6ms  0   redrawing!
+
+3ms  0   redrawing!
+
+4ms  0   redrawing!
+
+2ms  0   redrawing!
+
+6ms  0   redrawing!
+
+3ms  0   redrawing!
+
+2ms  0   redrawing!
+
+6ms  0   redrawing!
+
+3ms  0   redrawing!
+
+4ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+3ms  0   redrawing!
+
+4ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+8ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+2ms  0   redrawing!
+
+6ms  0   redrawing!
+
+2ms  0   redrawing!
+
+3ms  0   redrawing!
+
+2ms  0   redrawing!
+
+7ms  0   redrawing!
+
+6ms  0   redrawing!
+
+2ms  0   redrawing!
+
+6ms  0   redrawing!
+
+3ms  0   redrawing!
+
+3ms  0   redrawing!
+
+2ms  0   redrawing!
+
+6ms  0   redrawing!
+
+3ms  0   redrawing!
+
+4ms  0   redrawing!
+
+2ms  0   redrawing!
+
+6ms  0   redrawing!
+
+5ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+230ms  0   redrawing!
+
+2ms  0   redrawing!
+
+9ms  0   redrawing!
+
+8ms  0   redrawing!
+
+2ms  0   redrawing!
+
+6ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+2ms  0   redrawing!
+
+4ms  0   redrawing!
+
+2ms  0   redrawing!
+
+4ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+3ms  0   redrawing!
+
+3ms  0   redrawing!
+
+2ms  0   redrawing!
+
+6ms  0   redrawing!
+
+2ms  0   redrawing!
+
+4ms  0   redrawing!
+
+8ms  0   redrawing!
+
+3ms  0   redrawing!
+
+4ms  0   redrawing!
+
+50ms  0   redrawing!
+
+2ms  0   redrawing!
+
+51ms  0   redrawing!
+
+2ms  0   redrawing!
+
+21ms  0   redrawing!
+
+8ms  0   redrawing!
+
+6ms  0   redrawing!
+
+3ms  0   redrawing!
+
+3ms  0   redrawing!
+
+2ms  0   redrawing!
+
+6ms  0   redrawing!
+
+2ms  0   redrawing!
+
+4ms  0   redrawing!
+
+2ms  0   redrawing!
+
+6ms  0   redrawing!
+
+2ms  0   redrawing!
+
+4ms  0   redrawing!
+
+8ms  0   redrawing!
+
+3ms  0   redrawing!
+
+4ms  0   redrawing!
+
+37ms  0   redrawing!
+
+2ms  0   redrawing!
+
+9ms  0   redrawing!
+
+16ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+2ms  0   redrawing!
+
+4ms  0   redrawing!
+
+6ms  0   redrawing!
+
+8ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+2ms  0   redrawing!
+
+6ms  0   redrawing!
+
+11ms  0   redrawing!
+
+2ms  0   redrawing!
+
+13ms  0   redrawing!
+
+8ms  0   redrawing!
+
+2ms  0   redrawing!
+
+6ms  0   redrawing!
+
+8ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+8ms  0   redrawing!
+
+11ms  0   redrawing!
+
+8ms  0   redrawing!
+
+15ms  0   redrawing!
+
+64ms  0   redrawing!
+
+40ms  0   redrawing!
+
+2ms  0   redrawing!
+
+20ms  0   redrawing!
+
+5ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+3ms  0   redrawing!
+
+4ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+7ms  0   redrawing!
+
+3ms  0   redrawing!
+
+4ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+2ms  0   redrawing!
+
+3ms  0   redrawing!
+
+9ms  0   redrawing!
+
+6ms  0   redrawing!
+
+8ms  0   redrawing!
+
+2ms  0   redrawing!
+
+4ms  0   redrawing!
+
+2ms  0   redrawing!
+
+6ms  0   redrawing!
+
+3ms  0   redrawing!
+
+4ms  0   redrawing!
+
+2ms  0   redrawing!
+
+6ms  0   redrawing!
+
+3ms  0   redrawing!
+
+3ms  0   redrawing!
+
+2ms  0   redrawing!
+
+3ms  0   redrawing!
+
+3ms  0   redrawing!
+
+4ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+7ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+2ms  0   redrawing!
+
+4ms  0   redrawing!
+
+3ms  0   redrawing!
+
+5ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+2ms  0   redrawing!
+
+3ms  0   redrawing!
+
+3ms  0   redrawing!
+
+4ms  0   redrawing!
+
+8ms  0   redrawing!
+
+3ms  0   redrawing!
+
+4ms  0   redrawing!
+
+3ms  0   redrawing!
+
+4ms  0   redrawing!
+
+3ms  0   redrawing!
+
+4ms  0   redrawing!
+
+7ms  0   redrawing!
+
+7ms  0   redrawing!
+
+5ms  0   redrawing!
+
+8ms  0   redrawing!
+
+7ms  0   redrawing!
+
+8ms  0   redrawing!
+
+6ms  0   redrawing!
+
+9ms  0   redrawing!
+
+29ms  0   redrawing!
+
+118ms  0   redrawing!
+
+11ms  0   redrawing!
+
+17ms  0   redrawing!
+
+20ms  0   redrawing!
+
+28ms  0   redrawing!
+
+13ms  0   redrawing!
+
+18ms  0   redrawing!
+
+33ms  0   redrawing!
+
+21ms  0   redrawing!
+
+19ms  0   redrawing!
+
+15ms  0   redrawing!
+
+214ms  0   redrawing!
+
+134ms  0   redrawing!
+
+10ms  0   redrawing!
+
+42ms  0   redrawing!
+
+31ms  0   redrawing!
+
+34ms  0   redrawing!
+
+32ms  0   redrawing!
+
+37ms  0   redrawing!
+
+33ms  0   redrawing!
+
+33ms  0   redrawing!
+
+33ms  0   redrawing!
+
+33ms  0   redrawing!
+
+74ms  0   redrawing!
+
+39ms  0   redrawing!
+
+32ms  0   redrawing!
+
+63ms  0   redrawing!
+
+69ms  0   redrawing!
+
+32ms  0   redrawing!
+
+34ms  0   redrawing!
+
+32ms  0   redrawing!
+
+33ms  0   redrawing!
+
+33ms  0   redrawing!
+
+32ms  0   redrawing!
+
+33ms  0   redrawing!
+
+32ms  0   redrawing!
+
+32ms  0   redrawing!
+
+34ms  0   redrawing!
+
+33ms  0   redrawing!
+
+2ms  0   redrawing!
+
+246ms  0   redrawing!
+
+83ms  0   redrawing!
+
+67ms  0   redrawing!
+
+66ms  0   redrawing!
+
+35ms  0   redrawing!
+
+31ms  0   redrawing!
+
+32ms  0   redrawing!
+
+34ms  0   redrawing!
+
+32ms  0   redrawing!
+
+33ms  0   redrawing!
+
+33ms  0   redrawing!
+
+32ms  0   redrawing!
+
+33ms  0   redrawing!
+
+32ms  0   redrawing!
+
+89ms  0   redrawing!
+
+92ms  0   redrawing!
+
+12ms  0   redrawing!
+
+7ms  0   redrawing!
+
+5ms  0   redrawing!
+
+7ms  0   redrawing!
+
+8ms  0   redrawing!
+
+8ms  0   redrawing!
+
+7ms  0   redrawing!
+
+8ms  0   redrawing!
+
+7ms  0   redrawing!
+
+8ms  0   redrawing!
+
+7ms  0   redrawing!
+
+145ms  0   redrawing!
+
+16ms  0   redrawing!
+
+7ms  0   redrawing!
+
+7ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+7ms  0   redrawing!
+
+2ms  0   redrawing!
+
+4ms  0   redrawing!
+
+6ms  0   redrawing!
+
+2ms  0   redrawing!
+
+7ms  0   redrawing!
+
+2ms  0   redrawing!
+
+3ms  0   redrawing!
+
+2ms  0   redrawing!
+
+7ms  0   redrawing!
+
+3ms  0   redrawing!
+
+2ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+2ms  0   redrawing!
+
+4ms  0   redrawing!
+
+2ms  0   redrawing!
+
+7ms  0   redrawing!
+
+4ms  0   redrawing!
+
+2ms  0   redrawing!
+
+33ms  0   redrawing!
+
+2ms  0   redrawing!
+
+2ms  0   redrawing!
+
+8ms  0   redrawing!
+
+8ms  0   redrawing!
+
+5ms  0   redrawing!
+
+6ms  0   redrawing!
+
+9ms  0   redrawing!
+
+7ms  0   redrawing!
+
+7ms  0   redrawing!
+
+7ms  0   redrawing!
+
+10ms  0   redrawing!
+
+5ms  0   redrawing!
+
+9ms  0   redrawing!
+
+6ms  0   redrawing!
+
+6ms  0   redrawing!
+
+9ms  0   redrawing!
+
+6ms  0   redrawing!
+
+9ms  0   redrawing!
+
+7ms  0   redrawing!
+
+7ms  0   redrawing!
+
+7ms  0   redrawing!
+
+9ms  0   redrawing!
+
+4ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+3ms  0   redrawing!
+
+5ms  0   redrawing!
+
+2ms  0   redrawing!
+
+6ms  0   redrawing!
+
+6ms  0   redrawing!
+
+2ms  0   redrawing!
+
+6ms  0   redrawing!
+
+7ms  0   redrawing!
+
+2ms  0   redrawing!
+
+4ms  0   redrawing!
+
+2ms  0   redrawing!
+
+6ms  0   redrawing!
+
+5ms  0   redrawing!
+
+2ms  0   redrawing!
+
+7ms  0   redrawing!
+
+6ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+7ms  0   redrawing!
+
+2ms  0   redrawing!
+
+6ms  0   redrawing!
+
+4ms  0   redrawing!
+
+2ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+3ms  0   redrawing!
+
+2ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+1ms  0   redrawing!
+
+6ms  0   redrawing!
+
+2ms  0   redrawing!
+
+6ms  0   redrawing!
+
+2ms  0   redrawing!
+
+4ms  0   redrawing!
+
+2ms  0   redrawing!
+
+6ms  0   redrawing!
+
+6ms  0   redrawing!
+
+4ms  0   redrawing!
+
+3ms  0   redrawing!
+
+6ms  0   redrawing!
+
+2ms  0   redrawing!
+
+47ms  0   redrawing!
+
+152ms  0   redrawing!
+
+9ms  0   redrawing!
+
+6ms  0   redrawing!
+
+2ms  0   redrawing!
+
+5ms  0   redrawing!
+
+3ms  0   redrawing!
+
+3ms  0   redrawing!
+
+2ms  0   redrawing!
+
+7ms  0   redrawing!
+
+7ms  0   redrawing!
+
+6ms  0   redrawing!
+
+7ms  0   redrawing!
+
+7ms  0   redrawing!
+
+8ms  0   redrawing!
+
+7ms  0   redrawing!
+
+8ms  0   redrawing!
+
+7ms  0   redrawing!
+
+8ms  0   redrawing!
+
+7ms  0   redrawing!
+
+6ms  0   redrawing!
+
+6ms  0   redrawing!
+
+10ms  0   redrawing!
+
+5ms  0   redrawing!
+
+9ms  0   redrawing!
+
+6ms  0   redrawing!
+
+22ms  0   
