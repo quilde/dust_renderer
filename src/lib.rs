@@ -179,13 +179,7 @@ impl DustMain {
         );
 
         let transforms = wburrito::GPUVec::<glam::Mat3>::new_from(device, queue, "transforms", vec![
-            glam::Mat3::from_cols_array(
-                &[
-                    1.0,1.0,1.0,
-                    1.0,1.0,1.0,
-                    1.0,1.0,1.0,
-                ]
-            )
+            
         ]);
 
         let streams_group = wburrito::GroupWrap::new(device, queue, vec![
@@ -298,13 +292,55 @@ impl DustMain {
 
     pub fn prepare_render(&mut self, device: &Device, queue: &Queue, op: render_element::Operation) {
 
-        let rq = to_queue(op);
+        
+
+        let mut render_queue = RenderQueue::new("label rq");
+        
+        self.match_op(&op, &mut render_queue.commands);
 
         let rq_buffer = self.attachments2.rq.as_mut().unwrap();
         rq_buffer.clear();
-        rq.commands.iter().for_each(| c| rq_buffer.push(*c));
+        render_queue.commands.iter().for_each(| c| rq_buffer.push(*c));
         rq_buffer.update(device, queue);
         
+    }
+
+    fn match_op(&mut self, op: &render_element::Operation, v: &mut Vec<RenderCommand>) {
+        let transforms = self.attachments2.transforms.as_mut().unwrap();
+        match op {
+            render_element::Operation::Blend {layers}=> {
+                for l in layers {
+                    self.match_op(l, v);
+                }
+                if layers.is_empty() {
+                    v.push(RenderCommand{
+                        id: 0,
+                        command: 0,
+                    });
+                }
+            },
+            render_element::Operation::Overwrite{commands} => {
+                for c in commands {
+                    self.match_op(c, v);
+                }
+                if commands.is_empty() {
+                    v.push(RenderCommand{
+                        id: 0,
+                        command: 1,
+                    });
+                }
+            },
+            render_element::Operation::Circle{radius, transform} => {
+    
+                v.push(RenderCommand{
+                    id: 0,
+                    command: 2,
+                });
+
+                transforms.push(*transform);
+                
+            },
+        }
     }
     
     pub fn render_compute(
@@ -408,6 +444,9 @@ impl DustMain {
             self.attachments2.blit_group = Some(blit_group);
         }
     }
+
+    
+    
 }
 
 pub async fn setup<
@@ -621,52 +660,24 @@ pub fn render(
 
 
 
-pub fn to_queue(op: render_element::Operation) -> RenderQueue{
-    let mut render_queue = RenderQueue::new("label rq");
-    match_op(&op, &mut render_queue.commands);
-    render_queue
-}
-fn match_op(op: &render_element::Operation, v: &mut Vec<RenderCommand>) {
-    match op {
-        render_element::Operation::Blend {layers}=> {
-            for l in layers {
-                match_op(l, v);
-            }
-            if layers.is_empty() {
-                v.push(RenderCommand{
-                    id: 0,
-                    command: 0,
-                });
-            }
-        },
-        render_element::Operation::Overwrite{commands} => {
-            for c in commands {
-                match_op(c, v);
-            }
-            if commands.is_empty() {
-                v.push(RenderCommand{
-                    id: 0,
-                    command: 1,
-                });
-            }
-        },
-        render_element::Operation::Circle{radius, transform} => {
-
-            v.push(RenderCommand{
-                id: 0,
-                command: 2,
-            });
-            
-        },
-    }
-}
 
 
 pub fn test_op()-> render_element::Operation {
     render_element::Operation::Blend {
         layers: vec![
             render_element::Operation::Overwrite{
-                commands: Vec::new(),
+                commands: vec![
+                    render_element::Operation::Circle { 
+                        radius: 10.0, 
+                        transform: glam::Mat3::from_cols_array(
+                            &[
+                                1.0,1.0,1.0,
+                                1.0,1.0,1.0,
+                                1.0,1.0,1.0,
+                            ]
+                        ),
+                    }
+                ],
             }
         ],
     }
