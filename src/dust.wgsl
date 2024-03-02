@@ -7,10 +7,12 @@ fn main_image(@builtin(global_invocation_id) id: vec3u) {
     if (id.x >= screen_size.x || id.y >= screen_size.y) { return; }
 
     // Pixel coordinates (centre of pixel, origin at bottom left)
-    let fragCoord = vec2f(f32(id.x) + .5, f32(screen_size.y - id.y) - .5);
+    var fragCoord = vec2f(f32(id.x) + .5, f32(screen_size.y - id.y) - .5);
 
     // Normalised pixel coordinates (from 0 to 1)
-    let uv = fragCoord / vec2f(screen_size);
+    var uv = fragCoord / vec2f(screen_size);
+
+    fragCoord = (vec3f(fragCoord, 1.0) * transforms[2]).xy;
 
     // Time varying pixel colour
     var col = vec3f(0.,2.,4.);

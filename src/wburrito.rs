@@ -7,7 +7,7 @@ use encase::{StorageBuffer, ShaderSize, private::WriteInto};
 pub struct GPUVec<T: Copy> {
     buffer: wgpu::Buffer,
     capacity: usize,
-    data: Vec<T>,
+    pub data: Vec<T>,
     label: String,
 }
 

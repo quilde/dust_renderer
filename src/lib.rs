@@ -296,7 +296,7 @@ impl DustMain {
 
         let mut render_queue = RenderQueue::new("label rq");
         
-        self.match_op(&op, &mut render_queue.commands);
+        self.match_op(device, queue, &op, &mut render_queue.commands);
 
         let rq_buffer = self.attachments2.rq.as_mut().unwrap();
         rq_buffer.clear();
@@ -305,12 +305,13 @@ impl DustMain {
         
     }
 
-    fn match_op(&mut self, op: &render_element::Operation, v: &mut Vec<RenderCommand>) {
+    fn match_op(&mut self, device: &Device, queue: &Queue, op: &render_element::Operation, v: &mut Vec<RenderCommand>) {
         let transforms = self.attachments2.transforms.as_mut().unwrap();
+        transforms.clear();
         match op {
             render_element::Operation::Blend {layers}=> {
                 for l in layers {
-                    self.match_op(l, v);
+                    self.match_op(device, queue, l, v);
                 }
                 if layers.is_empty() {
                     v.push(RenderCommand{
@@ -321,7 +322,7 @@ impl DustMain {
             },
             render_element::Operation::Overwrite{commands} => {
                 for c in commands {
-                    self.match_op(c, v);
+                    self.match_op(device, queue, c, v);
                 }
                 if commands.is_empty() {
                     v.push(RenderCommand{
@@ -336,8 +337,10 @@ impl DustMain {
                     id: 0,
                     command: 2,
                 });
-
+                
                 transforms.push(*transform);
+                dbg!(&transforms.data);
+                transforms.update(device, queue);
                 
             },
         }
@@ -671,9 +674,9 @@ pub fn test_op()-> render_element::Operation {
                         radius: 10.0, 
                         transform: glam::Mat3::from_cols_array(
                             &[
-                                1.0,1.0,1.0,
-                                1.0,1.0,1.0,
-                                1.0,1.0,1.0,
+                                1.0,0.0,0.0,
+                                0.0,1.0,0.0,
+                                0.0,0.0,1.0,
                             ]
                         ),
                     }
