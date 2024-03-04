@@ -72,6 +72,7 @@ impl<T: Copy + ShaderSize + WriteInto> GPUVec<T> {
         
         queue.write_buffer(&self.buffer, 0, &byte_buffer.as_slice());
 
+        dbg!(&self.label);
         dbg!(&byte_buffer);
         
         realloc

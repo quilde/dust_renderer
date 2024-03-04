@@ -1,7 +1,6 @@
 
 
 
-use std::borrow::BorrowMut;
 
 use wburrito::GPUVec;
 use wgpu::{
@@ -35,78 +34,26 @@ pub struct RenderCommand {
 
 
 #[derive(Debug)]
-pub struct Attachments2 {
-    rq: Option<wburrito::GPUVec<RenderCommand>>,
-    rq_group: Option<wburrito::GroupWrap>,
-    target: Option<wburrito::StorageTextureWrap>,
-    target_group: Option<wburrito::GroupWrap>,
-    blit: Option<wburrito::TextureWrap>,
-    blit_group: Option<wburrito::GroupWrap>,
-    sampler: Option<wburrito::SamplerWrap>,
-    transforms: Option<wburrito::GPUVec<glam::Mat3>>,
-    streams_group: Option<wburrito::GroupWrap>,
-}
-impl Attachments2 {
-    pub fn new() -> Self {
-        Self {
-            rq: None,
-            rq_group: None,
-            target: None,
-            target_group: None,
-            blit: None,
-            blit_group: None,
-            sampler: None,
-            transforms: None,
-            streams_group: None,
-        }
-    }
-}
-
-#[derive(Debug)]
 pub struct Attachments {
-    target: Option<wgpu::Texture>,
-    blit: Option<wgpu::Texture>,
-    target_blit_keys: Option<(usize, usize)>,
-    textures: Vec<wgpu::Texture>,
-    texture_dimensions: Vec<wgpu::Extent3d>,
-    texture_views: Vec<wgpu::TextureView>,
-    samplers: Vec<wgpu::Sampler>,
-    bind_group_layouts: Vec<wgpu::BindGroupLayout>,
-    bind_groups: Vec<wgpu::BindGroup>,
+    rq: wburrito::GPUVec<RenderCommand>,
+    rq_group: wburrito::GroupWrap,
+    target: wburrito::StorageTextureWrap,
+    target_group: wburrito::GroupWrap,
+    blit: wburrito::TextureWrap,
+    blit_group: wburrito::GroupWrap,
+    sampler: wburrito::SamplerWrap,
+    transforms: wburrito::GPUVec<glam::Mat3>,
+    streams_group: wburrito::GroupWrap,
 }
 impl Attachments {
-    pub fn new() -> Self {
-        Self {
-            target: None,
-            blit: None,
-            target_blit_keys: None,
-            textures: Vec::new(),
-            texture_dimensions: Vec::new(),
-            texture_views: Vec::new(),
-            samplers: Vec::new(),
-            bind_group_layouts: Vec::new(),
-            bind_groups: Vec::new(),
-        }
-    }
-    pub fn prepare(&mut self, device: &Device, queue: &Queue) {}
-    pub fn bind_groups(&self) -> &Vec<wgpu::BindGroupLayout> {
-        &self.bind_group_layouts
-    }
-    pub fn push_layout(&mut self, layout: wgpu::BindGroupLayout) -> usize {
-        self.bind_group_layouts.push(layout);
-        self.bind_group_layouts.len() - 1
-    }
-    pub fn push_bindgroup(&mut self, group: wgpu::BindGroup) -> usize {
-        self.bind_groups.push(group);
-        self.bind_groups.len() - 1
-    }
+
 }
 
 pub struct DustMain {
     compute_pipeline: wgpu::ComputePipeline,
     blit_pipeline: wgpu::RenderPipeline,
+    
     attachments: Attachments,
-    attachments2: Attachments2,
 }
 impl DustMain {
     pub fn new(
@@ -115,15 +62,8 @@ impl DustMain {
         config: &SurfaceConfiguration,
         window_size: glam::UVec2,
     ) -> Self {
-        let mut attachments = Attachments::new();
-
-        //let dimensions = glam::Vec2{x: 1.0, y: 1.0};
-        //let dimensions = glam::UVec2{x: 100, y: 100};
+        
         let dimensions = window_size;
-
-        //let (key_output, key_blit) = Self::create_target_and_blit(&device, &queue, &dimensions, &mut attachments).expect("bad");
-
-        //attachments.target_blit_keys = Some((key_output, key_blit));
 
         let target = wburrito::StorageTextureWrap::new(device, queue, &dimensions);
         let blit = wburrito::TextureWrap::new(device, queue, &dimensions);
@@ -158,7 +98,7 @@ impl DustMain {
             "label_group blit",
         );
 
-        let mut attachments2 = Attachments2::new();
+        
 
         let rq = wburrito::GPUVec::<RenderCommand>::new_from(
             device,
@@ -199,7 +139,6 @@ impl DustMain {
             label: Some("compute ShaderModuleDescriptor"),
             source: wgpu::ShaderSource::Wgsl(include_str!("dust.wgsl").into()),
         });
-        dbg!(&attachments.bind_group_layouts);
 
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
@@ -233,7 +172,7 @@ impl DustMain {
             bind_group_layouts: &[&blit_group.layout],
             push_constant_ranges: &[],
         });
-        let img_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let blit_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render Pipeline paint image"),
             layout: Some(&layout_img),
             vertex: wgpu::VertexState {
@@ -273,21 +212,22 @@ impl DustMain {
             multiview: None, // 5.
         });
 
-        attachments2.rq = Some(rq);
-        attachments2.rq_group = Some(rq_group);
-        attachments2.target = Some(target);
-        attachments2.target_group = Some(target_group);
-        attachments2.blit = Some(blit);
-        attachments2.blit_group = Some(blit_group);
-        attachments2.sampler = Some(sampler);
-        attachments2.streams_group = Some(streams_group);
-        attachments2.transforms = Some(transforms);
+        let attachments = Attachments {
+            rq,
+            rq_group,
+            target,
+            blit,
+            target_group,
+            blit_group,
+            sampler,
+            transforms,
+            streams_group,
+        };
 
         Self {
             compute_pipeline,
-            blit_pipeline: img_pipeline,
+            blit_pipeline,
             attachments,
-            attachments2,
         }
     }
 
@@ -300,30 +240,31 @@ impl DustMain {
         let mut render_queue = RenderQueue::new("label rq");
 
         {
-        let mut transforms = self.attachments2.transforms.as_mut().unwrap();
+        let mut transforms = &mut self.attachments.transforms;
         transforms.clear();
         }
+        self.match_op(device, queue, &op, &mut render_queue.commands,);
         
-        self.match_op(device, queue, &op, &mut render_queue.commands, &mut transforms);
-
-        
+        {
+        let mut transforms = &mut self.attachments.transforms;
         dbg!(&transforms);
         dbg!(transforms.update(device, queue));
+        }
 
-        let rq_buffer = self.attachments2.rq.as_mut().unwrap();
+        let mut rq_buffer = &mut self.attachments.rq;
         rq_buffer.clear();
         render_queue.commands.iter().for_each(| c| rq_buffer.push(*c));
         rq_buffer.update(device, queue);
         
     }
 
-    fn match_op(&self, device: &Device, queue: &Queue, op: &render_element::Operation, v: &mut Vec<RenderCommand>, transforms: &mut GPUVec<glam::Mat3>) {
+    fn match_op(&mut self, device: &Device, queue: &Queue, op: &render_element::Operation, v: &mut Vec<RenderCommand>, ) {
         //let mut transforms = self.attachments2.transforms.as_mut().unwrap();
-        
+        let mut transforms = &mut self.attachments.transforms;
         match op {
             render_element::Operation::Blend {layers}=> {
                 for l in layers {
-                    self.match_op(device, queue, l, v, transforms);
+                    self.match_op(device, queue, l, v,);
                 }
                 if layers.is_empty() {
                     v.push(RenderCommand{
@@ -334,7 +275,7 @@ impl DustMain {
             },
             render_element::Operation::Overwrite{commands} => {
                 for c in commands {
-                    self.match_op(device, queue, c, v, transforms);
+                    self.match_op(device, queue, c, v,);
                 }
                 if commands.is_empty() {
                     v.push(RenderCommand{
@@ -349,7 +290,7 @@ impl DustMain {
                     id: 0,
                     command: 2,
                 });
-                
+                transforms.clear();
                 transforms.push(*transform);
                 dbg!(&transforms.data);
                 
@@ -370,36 +311,36 @@ impl DustMain {
             cpass.set_pipeline(&self.compute_pipeline);
             cpass.set_bind_group(
                 0,
-                &self.attachments2.target_group.as_ref().unwrap().bind_group,
+                &self.attachments.target_group.bind_group,
                 &[],
             );
             cpass.set_bind_group(
                 1,
-                &self.attachments2.rq_group.as_ref().unwrap().bind_group,
+                &self.attachments.rq_group.bind_group,
                 &[],
             );
             cpass.set_bind_group(
                 2,
-                &self.attachments2.streams_group.as_ref().unwrap().bind_group,
+                &self.attachments.streams_group.bind_group,
                 &[],
             );
             cpass.dispatch_workgroups((window_size.x / 16) + 1, (window_size.y / 16) + 1, 1);
         }
-        //dbg!(&self.attachments.target.as_ref().unwrap().size());
+        
         encoder.copy_texture_to_texture(
             ImageCopyTexture {
-                texture: &self.attachments2.target.as_ref().unwrap().texture,
+                texture: &self.attachments.target.texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
             ImageCopyTexture {
-                texture: &self.attachments2.blit.as_ref().unwrap().texture,
+                texture: &self.attachments.blit.texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            self.attachments2.target.as_ref().unwrap().texture_size,
+            self.attachments.target.texture_size,
         );
 
         encoder
@@ -408,15 +349,15 @@ impl DustMain {
         rpass.set_pipeline(&self.blit_pipeline);
         rpass.set_bind_group(
             0,
-            &self.attachments2.blit_group.as_ref().unwrap().bind_group,
+            &self.attachments.blit_group.bind_group,
             &[],
         );
         rpass.draw(0..5, 0..1);
     }
     pub fn resize(&mut self, device: &Device, queue: &Queue, new_size: glam::UVec2) {
-        let target = self.attachments2.target.as_mut().unwrap();
-        let blit = self.attachments2.blit.as_mut().unwrap();
-        let sampler = self.attachments2.sampler.as_ref().unwrap();
+        let target = &mut self.attachments.target;
+        let blit = &mut self.attachments.blit;
+        let sampler = &mut self.attachments.sampler;
         if new_size.x != 0 && new_size.y != 0  {
 
             target
@@ -455,8 +396,8 @@ impl DustMain {
                 "label_group blit",
             );
 
-            self.attachments2.target_group = Some(target_group);
-            self.attachments2.blit_group = Some(blit_group);
+            self.attachments.target_group = target_group;
+            self.attachments.blit_group = blit_group;
         }
     }
 
