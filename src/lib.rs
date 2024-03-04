@@ -1,6 +1,9 @@
 
 
 
+use std::borrow::BorrowMut;
+
+use wburrito::GPUVec;
 use wgpu::{
     Device, ImageCopyTexture, Operations, Queue, Surface, SurfaceConfiguration
 };
@@ -295,8 +298,17 @@ impl DustMain {
         
 
         let mut render_queue = RenderQueue::new("label rq");
+
+        {
+        let mut transforms = self.attachments2.transforms.as_mut().unwrap();
+        transforms.clear();
+        }
         
-        self.match_op(device, queue, &op, &mut render_queue.commands);
+        self.match_op(device, queue, &op, &mut render_queue.commands, &mut transforms);
+
+        
+        dbg!(&transforms);
+        dbg!(transforms.update(device, queue));
 
         let rq_buffer = self.attachments2.rq.as_mut().unwrap();
         rq_buffer.clear();
@@ -305,13 +317,13 @@ impl DustMain {
         
     }
 
-    fn match_op(&mut self, device: &Device, queue: &Queue, op: &render_element::Operation, v: &mut Vec<RenderCommand>) {
-        let transforms = self.attachments2.transforms.as_mut().unwrap();
-        transforms.clear();
+    fn match_op(&self, device: &Device, queue: &Queue, op: &render_element::Operation, v: &mut Vec<RenderCommand>, transforms: &mut GPUVec<glam::Mat3>) {
+        //let mut transforms = self.attachments2.transforms.as_mut().unwrap();
+        
         match op {
             render_element::Operation::Blend {layers}=> {
                 for l in layers {
-                    self.match_op(device, queue, l, v);
+                    self.match_op(device, queue, l, v, transforms);
                 }
                 if layers.is_empty() {
                     v.push(RenderCommand{
@@ -322,7 +334,7 @@ impl DustMain {
             },
             render_element::Operation::Overwrite{commands} => {
                 for c in commands {
-                    self.match_op(device, queue, c, v);
+                    self.match_op(device, queue, c, v, transforms);
                 }
                 if commands.is_empty() {
                     v.push(RenderCommand{
@@ -340,7 +352,7 @@ impl DustMain {
                 
                 transforms.push(*transform);
                 dbg!(&transforms.data);
-                transforms.update(device, queue);
+                
                 
             },
         }
