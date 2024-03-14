@@ -11,7 +11,7 @@ pub struct GPUVec<T: Copy> {
     label: String,
 }
 
-impl<T: Copy + ShaderSize + WriteInto> GPUVec<T> {
+impl<T: Copy + ShaderSize + WriteInto + std::fmt::Debug> GPUVec<T> {
     
     pub fn new_from(device: &wgpu::Device, queue: &wgpu::Queue, label: &str, from: Vec<T> ) -> Self {
         //let staticfrom: &Vec<&T> = &from.iter().map(|i|{i}).collect();
@@ -34,7 +34,7 @@ impl<T: Copy + ShaderSize + WriteInto> GPUVec<T> {
         
         Self {
             buffer,
-            capacity: 1,
+            capacity: byte_buffer.len(),
             data: from,
             label: label.into(),
         }
@@ -46,6 +46,8 @@ impl<T: Copy + ShaderSize + WriteInto> GPUVec<T> {
     /// We'd like to write directly to the mapped buffer, but that seemed
     /// tricky with wgpu.
     pub fn update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) -> bool {
+        dbg!(&self.label);
+        dbg!(&self.data);
         let mut byte_buffer: Vec<u8> = Vec::new();
         
         let mut storage_buffer = encase::StorageBuffer::new(&mut byte_buffer);
@@ -53,10 +55,10 @@ impl<T: Copy + ShaderSize + WriteInto> GPUVec<T> {
             &self.data
         ).unwrap();
         
-        
+        println!("byte_buffer {}  capacity {}", &byte_buffer.len(), self.capacity);
         let realloc = byte_buffer.len() > self.capacity;
         if realloc {
-            self.capacity = byte_buffer.len().next_power_of_two();
+            self.capacity = byte_buffer.len();
             self.buffer = device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some(self.label.as_str()),
                 size: byte_buffer.len() as u64,
@@ -66,14 +68,15 @@ impl<T: Copy + ShaderSize + WriteInto> GPUVec<T> {
         }
 
         //let sz = self.data.len() * size_of::<T>();
-        /*queue.write_buffer(&self.buffer, 0, unsafe {
+        /*let sz = byte_buffer.len();
+        queue.write_buffer(&self.buffer, 0, unsafe {
             std::slice::from_raw_parts_mut(self.data[..].as_ptr() as *mut u8, sz)
         }); */
         
         queue.write_buffer(&self.buffer, 0, &byte_buffer.as_slice());
 
-        dbg!(&self.label);
-        dbg!(&byte_buffer);
+        
+        println!("{:?}", &byte_buffer);
         
         realloc
     }
@@ -95,11 +98,7 @@ impl<T: Copy + ShaderSize + WriteInto> GPUVec<T> {
     pub fn bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry {
         wgpu::BindGroupEntry {
             binding,
-            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                buffer: &self.buffer,
-                offset: 0,
-                size: None,
-            }),
+            resource: wgpu::BindingResource::Buffer(self.buffer.as_entire_buffer_binding()),
         }
     }
 

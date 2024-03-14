@@ -42,7 +42,7 @@ pub struct Attachments {
     blit: wburrito::TextureWrap,
     blit_group: wburrito::GroupWrap,
     sampler: wburrito::SamplerWrap,
-    transforms: wburrito::GPUVec<glam::Mat3>,
+    pub transforms: wburrito::GPUVec<glam::Mat3>,
     streams_group: wburrito::GroupWrap,
 }
 impl Attachments {
@@ -53,7 +53,7 @@ pub struct DustMain {
     compute_pipeline: wgpu::ComputePipeline,
     blit_pipeline: wgpu::RenderPipeline,
     
-    attachments: Attachments,
+    pub attachments: Attachments,
 }
 impl DustMain {
     pub fn new(
@@ -122,7 +122,13 @@ impl DustMain {
         );
 
         let transforms = wburrito::GPUVec::<glam::Mat3>::new_from(device, queue, "transforms", vec![
-            
+            glam::Mat3::from_cols_array(
+                &[
+                    1.0,0.0,0.0,
+                    0.0,1.0,0.0,
+                    0.0,0.0,1.0,
+                ]
+            ),
         ]);
 
         let streams_group = wburrito::GroupWrap::new(device, queue, vec![
@@ -233,6 +239,17 @@ impl DustMain {
 
     pub fn setup(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {}
 
+    pub fn test(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
+        self.attachments.transforms.push(glam::Mat3::from_cols_array(
+            &[
+                1.0,0.0,0.0,
+                0.0,1.0,0.0,
+                0.0,0.0,1.0,
+            ]
+        ));
+        
+    }
+
     pub fn prepare_render(&mut self, device: &Device, queue: &Queue, op: render_element::Operation) {
 
         
@@ -249,7 +266,10 @@ impl DustMain {
         let mut transforms = &mut self.attachments.transforms;
         dbg!(&transforms);
         dbg!(transforms.update(device, queue));
+        dbg!(&self.attachments.streams_group);
         }
+
+
 
         let mut rq_buffer = &mut self.attachments.rq;
         rq_buffer.clear();
@@ -290,7 +310,7 @@ impl DustMain {
                     id: 0,
                     command: 2,
                 });
-                transforms.clear();
+                
                 transforms.push(*transform);
                 dbg!(&transforms.data);
                 

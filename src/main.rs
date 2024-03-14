@@ -130,7 +130,10 @@ pub async fn run() {
             }
             Event::RedrawRequested(window_id) => {
                 println!("redrawing!\n");
-                dust_main.prepare_render(&device, &queue, dust_renderer::test_op());
+                dust_main.attachments.transforms.clear();
+                dust_main.test(&device, &queue);
+                dust_main.test(&device, &queue);
+                dust_main.attachments.transforms.update(&device, &queue);
                 let size1 = &window.as_ref().unwrap().inner_size();
                 let size = glam::UVec2 {
                     x: size1.width,
