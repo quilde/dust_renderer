@@ -9,9 +9,6 @@ impl RenderElement {
 
 #[derive(PartialEq)]
 pub enum Node {
-    Overwrite{
-        commands: Vec<Node>
-    },
     Blend {
         layers: Vec<Node>,
     },

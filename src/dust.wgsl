@@ -10,7 +10,7 @@ fn main_image(@builtin(global_invocation_id) id: vec3u) {
     var fragCoord_standard = vec2f(f32(id.x) + .5, f32(screen_size.y - id.y) - .5);
     var fragCoord = vec2f(0., 0.);
 
-    var col = vec3f(1.,1.,1.);
+    var col = vec4f(1.,1.,1.,1.);
 
     // Normalised pixel coordinates (from 0 to 1)
     var uv = fragCoord / vec2f(screen_size);
@@ -27,17 +27,18 @@ fn main_image(@builtin(global_invocation_id) id: vec3u) {
             case 1u: {
             }
             case 2u: {
-            }
-            case 3u: {
                 fragCoord = (vec3f(fragCoord_standard, 1.0) * transforms[transforms_counter]).xy;
                 transforms_counter++;
                 var d = sdCircle(fragCoord, 100.);
 
                 if d < 0.0 {
-                    col = vec3f(0., 0., 0.);
+                    col = vec4f(0., 0., 0.,0.) + (0. * col);
                 } else {
-                    col = vec3f(1., 1., 1.);
+                    //col = vec4f(1., 1., 1.,1.) + (0. * col);
                 }
+            }
+            case 3u: {
+                
             }
         }
     }
@@ -45,10 +46,10 @@ fn main_image(@builtin(global_invocation_id) id: vec3u) {
     
 
     // Convert from gamma-encoded to linear colour space
-    col = pow(col, vec3f(2.2));
+    col = vec4f(pow(col.xyz, vec3f(2.2)), 1.);
 
     // Output to screen (linear colour space)
-    textureStore(screen, id.xy, vec4f(col, 1.));
+    textureStore(screen, id.xy, col);
 }
 
 

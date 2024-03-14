@@ -1,17 +1,11 @@
-
-
-
-
 use crate::render_element::Node;
 
-use wgpu::{
-    Device, ImageCopyTexture, Queue, Surface, SurfaceConfiguration
-};
+use wgpu::{Device, ImageCopyTexture, Queue, Surface, SurfaceConfiguration};
 
 use encase::ShaderType;
 
-mod wburrito;
 mod render_element;
+mod wburrito;
 
 pub struct RenderQueue {
     label: &'static str,
@@ -32,8 +26,6 @@ pub struct RenderCommand {
     command: u32,
 }
 
-
-
 #[derive(Debug)]
 pub struct Attachments {
     rq: wburrito::GPUVec<RenderCommand>,
@@ -46,14 +38,12 @@ pub struct Attachments {
     pub transforms: wburrito::GPUVec<glam::Mat3>,
     streams_group: wburrito::GroupWrap,
 }
-impl Attachments {
-
-}
+impl Attachments {}
 
 pub struct DustMain {
     compute_pipeline: wgpu::ComputePipeline,
     blit_pipeline: wgpu::RenderPipeline,
-    
+
     pub attachments: Attachments,
 }
 impl DustMain {
@@ -63,7 +53,6 @@ impl DustMain {
         config: &SurfaceConfiguration,
         window_size: glam::UVec2,
     ) -> Self {
-        
         let dimensions = window_size;
 
         let target = wburrito::StorageTextureWrap::new(device, queue, &dimensions);
@@ -99,8 +88,6 @@ impl DustMain {
             "label_group blit",
         );
 
-        
-
         let rq = wburrito::GPUVec::<RenderCommand>::new_from(
             device,
             queue,
@@ -122,25 +109,25 @@ impl DustMain {
             "rq bindgroup",
         );
 
-        let transforms = wburrito::GPUVec::<glam::Mat3>::new_from(device, queue, "transforms", vec![
-            glam::Mat3::from_cols_array(
-                &[
-                    1.0,1.0,1.0,
-                    0.0,1.0,0.0,
-                    0.0,0.0,1.0,
-                ]
-            ),
-        ]);
+        let transforms = wburrito::GPUVec::<glam::Mat3>::new_from(
+            device,
+            queue,
+            "transforms",
+            vec![glam::Mat3::from_cols_array(&[
+                1.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0,
+            ])],
+        );
 
-        let streams_group = wburrito::GroupWrap::new(device, queue, vec![
-            (
+        let streams_group = wburrito::GroupWrap::new(
+            device,
+            queue,
+            vec![(
                 wburrito::GPUVec::<glam::Mat3>::bind_group_layout_entry(0),
                 transforms.bind_group_entry(0),
-            ),
-        ],
-        "label_layout", 
-        "label_group");
-
+            )],
+            "label_layout",
+            "label_group",
+        );
 
         let compute_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("compute ShaderModuleDescriptor"),
@@ -149,7 +136,11 @@ impl DustMain {
 
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
-            bind_group_layouts: &[&target_group.layout, &rq_group.layout, &streams_group.layout],
+            bind_group_layouts: &[
+                &target_group.layout,
+                &rq_group.layout,
+                &streams_group.layout,
+            ],
             push_constant_ranges: &[],
         });
 
@@ -241,45 +232,50 @@ impl DustMain {
     pub fn setup(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {}
 
     pub fn test(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
-        self.attachments.transforms.push(glam::Mat3::from_cols_array(
-            &[
-                1.0,0.0,1.0,
-                0.0,1.0,0.0,
-                0.0,0.0,1.0,
-            ]
-        ));
-        
+        self.attachments
+            .transforms
+            .push(glam::Mat3::from_cols_array(&[
+                1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0,
+            ]));
     }
 
-    pub fn prepare_render(&mut self, device: &Device, queue: &Queue, node: &mut render_element::Node) {
-
-        let (v,t) = derive_buffers_from_node(node);
-
-
+    pub fn prepare_render(
+        &mut self,
+        device: &Device,
+        queue: &Queue,
+        node: &mut render_element::Node,
+    ) {
+        let (v, t) = derive_buffers_from_node(node);
 
         let mut transforms = &mut self.attachments.transforms;
         transforms.replace(t);
         let realloc_transforms = transforms.update(device, queue);
         if realloc_transforms {
-            self.attachments.streams_group.update(device, queue, vec![
-                (wburrito::GPUVec::<glam::Mat3>::bind_group_layout_entry(0),
-                transforms.bind_group_entry(0),)
-            ]);
+            self.attachments.streams_group.update(
+                device,
+                queue,
+                vec![(
+                    wburrito::GPUVec::<glam::Mat3>::bind_group_layout_entry(0),
+                    transforms.bind_group_entry(0),
+                )],
+            );
         }
-        
+
         let mut rq = &mut self.attachments.rq;
         rq.replace(v);
         let realloc_rq = rq.update(device, queue);
         if realloc_rq {
-        self.attachments.rq_group.update(device, queue, vec![
-            (wburrito::GPUVec::<RenderCommand>::bind_group_layout_entry(0),
-            rq.bind_group_entry(0),)
-        ]);
+            self.attachments.rq_group.update(
+                device,
+                queue,
+                vec![(
+                    wburrito::GPUVec::<RenderCommand>::bind_group_layout_entry(0),
+                    rq.bind_group_entry(0),
+                )],
+            );
         }
-        
     }
 
-    
     pub fn render_compute(
         &mut self,
         mut encoder: wgpu::CommandEncoder,
@@ -290,24 +286,12 @@ impl DustMain {
         {
             let mut cpass = encoder.begin_compute_pass(&Default::default());
             cpass.set_pipeline(&self.compute_pipeline);
-            cpass.set_bind_group(
-                0,
-                &self.attachments.target_group.bind_group,
-                &[],
-            );
-            cpass.set_bind_group(
-                1,
-                &self.attachments.rq_group.bind_group,
-                &[],
-            );
-            cpass.set_bind_group(
-                2,
-                &self.attachments.streams_group.bind_group,
-                &[],
-            );
+            cpass.set_bind_group(0, &self.attachments.target_group.bind_group, &[]);
+            cpass.set_bind_group(1, &self.attachments.rq_group.bind_group, &[]);
+            cpass.set_bind_group(2, &self.attachments.streams_group.bind_group, &[]);
             cpass.dispatch_workgroups((window_size.x / 16) + 1, (window_size.y / 16) + 1, 1);
         }
-        
+
         encoder.copy_texture_to_texture(
             ImageCopyTexture {
                 texture: &self.attachments.target.texture,
@@ -328,26 +312,16 @@ impl DustMain {
     }
     pub fn render<'rpass>(&'rpass self, rpass: &mut wgpu::RenderPass<'rpass>, device: &Device) {
         rpass.set_pipeline(&self.blit_pipeline);
-        rpass.set_bind_group(
-            0,
-            &self.attachments.blit_group.bind_group,
-            &[],
-        );
+        rpass.set_bind_group(0, &self.attachments.blit_group.bind_group, &[]);
         rpass.draw(0..5, 0..1);
     }
     pub fn resize(&mut self, device: &Device, queue: &Queue, new_size: glam::UVec2) {
         let target = &mut self.attachments.target;
         let blit = &mut self.attachments.blit;
         let sampler = &mut self.attachments.sampler;
-        if new_size.x != 0 && new_size.y != 0  {
-
-            target
-
-                .update(device, queue, &new_size);
-            blit
-                .update(device, queue, &new_size);
-
-            
+        if new_size.x != 0 && new_size.y != 0 {
+            target.update(device, queue, &new_size);
+            blit.update(device, queue, &new_size);
 
             let target_group = wburrito::GroupWrap::new(
                 device,
@@ -381,9 +355,6 @@ impl DustMain {
             self.attachments.blit_group = blit_group;
         }
     }
-
-    
-    
 }
 
 pub async fn setup<
@@ -544,7 +515,6 @@ pub fn resize_window(
     }
 }
 
-
 pub fn render(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
@@ -595,82 +565,44 @@ pub fn render(
     Ok(())
 }
 
-
-
-
-
-pub fn test_op()-> render_element::Node {
+pub fn test_op() -> render_element::Node {
     render_element::Node::Blend {
         layers: vec![
-            render_element::Node::Overwrite{
-                commands: vec![
-                    render_element::Node::Circle { 
-                        radius: 10.0, 
-                        transform: glam::Mat3::from_cols_array(
-                            &[
-                                1.0,0.0,-100.0,
-                                0.0,1.0,-100.0,
-                                0.0,0.0,1.0,
-                            ]
-                        ),
-                    },
-                    render_element::Node::Circle { 
-                        radius: 10.0, 
-                        transform: glam::Mat3::from_cols_array(
-                            &[
-                                1.0,0.0,-200.0,
-                                0.0,1.0,-200.0,
-                                0.0,0.0,1.0,
-                            ]
-                        ),
-                    }
-                ],
-            }
+            render_element::Node::Circle {
+                radius: 10.0,
+                transform: glam::Mat3::from_cols_array(&[
+                    1.0, 0.0, -100.0, 0.0, 1.0, -100.0, 0.0, 0.0, 1.0,
+                ]),
+            },
+            render_element::Node::Circle {
+                radius: 10.0,
+                transform: glam::Mat3::from_cols_array(&[
+                    1.0, 0.0, -200.0, 0.0, 1.0, -200.0, 0.0, 0.0, 1.0,
+                ]),
+            },
         ],
     }
 }
-
 
 fn derive_buffers_from_node(node: &mut Node) -> (Vec<RenderCommand>, Vec<glam::Mat3>) {
     let mut v = Vec::<RenderCommand>::new();
     let mut t = Vec::<glam::Mat3>::new();
     match node {
-        render_element::Node::Blend {layers}=> {
+        render_element::Node::Blend { layers } => {
             for l in layers.iter_mut() {
-                let (mut a,mut b) = derive_buffers_from_node(l);
+                let (mut a, mut b) = derive_buffers_from_node(l);
                 v.append(&mut a);
                 t.append(&mut b);
             }
-            if layers.is_empty() {
-                v.push(RenderCommand{
-                    id: 0,
-                    command: 1,
-                });
-            }
-        },
-        render_element::Node::Overwrite{commands} => {
-            for c in commands.iter_mut() {
-                let (mut a,mut b) = derive_buffers_from_node(c);
-                v.append(&mut a);
-                t.append(&mut b);
-            }
-            if commands.is_empty() {
-                v.push(RenderCommand{
-                    id: 0,
-                    command: 2,
-                });
-            }
-        },
-        render_element::Node::Circle{radius, transform} => {
-            v.push(RenderCommand{
-                id: 0,
-                command: 3,
-            });
-            
-            t.push(*transform);          
-            
-        },
+
+            v.push(RenderCommand { id: 0, command: 1 });
+        }
+        render_element::Node::Circle { radius, transform } => {
+            v.push(RenderCommand { id: 0, command: 2 });
+
+            t.push(*transform);
+        }
     }
 
-    return (v,t);
+    return (v, t);
 }
