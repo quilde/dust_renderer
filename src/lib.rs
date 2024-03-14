@@ -2,9 +2,10 @@
 
 
 
-use wburrito::GPUVec;
+use crate::render_element::Node;
+
 use wgpu::{
-    Device, ImageCopyTexture, Operations, Queue, Surface, SurfaceConfiguration
+    Device, ImageCopyTexture, Queue, Surface, SurfaceConfiguration
 };
 
 use encase::ShaderType;
@@ -124,7 +125,7 @@ impl DustMain {
         let transforms = wburrito::GPUVec::<glam::Mat3>::new_from(device, queue, "transforms", vec![
             glam::Mat3::from_cols_array(
                 &[
-                    1.0,0.0,0.0,
+                    1.0,1.0,1.0,
                     0.0,1.0,0.0,
                     0.0,0.0,1.0,
                 ]
@@ -242,7 +243,7 @@ impl DustMain {
     pub fn test(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
         self.attachments.transforms.push(glam::Mat3::from_cols_array(
             &[
-                1.0,0.0,0.0,
+                1.0,0.0,1.0,
                 0.0,1.0,0.0,
                 0.0,0.0,1.0,
             ]
@@ -250,74 +251,34 @@ impl DustMain {
         
     }
 
-    pub fn prepare_render(&mut self, device: &Device, queue: &Queue, op: render_element::Operation) {
+    pub fn prepare_render(&mut self, device: &Device, queue: &Queue, node: &mut render_element::Node) {
 
-        
+        let (v,t) = derive_buffers_from_node(node);
 
-        let mut render_queue = RenderQueue::new("label rq");
 
-        {
+
         let mut transforms = &mut self.attachments.transforms;
-        transforms.clear();
+        transforms.replace(t);
+        let realloc_transforms = transforms.update(device, queue);
+        if realloc_transforms {
+            self.attachments.streams_group.update(device, queue, vec![
+                (wburrito::GPUVec::<glam::Mat3>::bind_group_layout_entry(0),
+                transforms.bind_group_entry(0),)
+            ]);
         }
-        self.match_op(device, queue, &op, &mut render_queue.commands,);
         
-        {
-        let mut transforms = &mut self.attachments.transforms;
-        dbg!(&transforms);
-        dbg!(transforms.update(device, queue));
-        dbg!(&self.attachments.streams_group);
+        let mut rq = &mut self.attachments.rq;
+        rq.replace(v);
+        let realloc_rq = rq.update(device, queue);
+        if realloc_rq {
+        self.attachments.rq_group.update(device, queue, vec![
+            (wburrito::GPUVec::<RenderCommand>::bind_group_layout_entry(0),
+            rq.bind_group_entry(0),)
+        ]);
         }
-
-
-
-        let mut rq_buffer = &mut self.attachments.rq;
-        rq_buffer.clear();
-        render_queue.commands.iter().for_each(| c| rq_buffer.push(*c));
-        rq_buffer.update(device, queue);
         
     }
 
-    fn match_op(&mut self, device: &Device, queue: &Queue, op: &render_element::Operation, v: &mut Vec<RenderCommand>, ) {
-        //let mut transforms = self.attachments2.transforms.as_mut().unwrap();
-        let mut transforms = &mut self.attachments.transforms;
-        match op {
-            render_element::Operation::Blend {layers}=> {
-                for l in layers {
-                    self.match_op(device, queue, l, v,);
-                }
-                if layers.is_empty() {
-                    v.push(RenderCommand{
-                        id: 0,
-                        command: 0,
-                    });
-                }
-            },
-            render_element::Operation::Overwrite{commands} => {
-                for c in commands {
-                    self.match_op(device, queue, c, v,);
-                }
-                if commands.is_empty() {
-                    v.push(RenderCommand{
-                        id: 0,
-                        command: 1,
-                    });
-                }
-            },
-            render_element::Operation::Circle{radius, transform} => {
-    
-                v.push(RenderCommand{
-                    id: 0,
-                    command: 2,
-                });
-                
-                transforms.push(*transform);
-                dbg!(&transforms.data);
-                
-                
-            },
-        }
-    }
     
     pub fn render_compute(
         &mut self,
@@ -638,17 +599,27 @@ pub fn render(
 
 
 
-pub fn test_op()-> render_element::Operation {
-    render_element::Operation::Blend {
+pub fn test_op()-> render_element::Node {
+    render_element::Node::Blend {
         layers: vec![
-            render_element::Operation::Overwrite{
+            render_element::Node::Overwrite{
                 commands: vec![
-                    render_element::Operation::Circle { 
+                    render_element::Node::Circle { 
                         radius: 10.0, 
                         transform: glam::Mat3::from_cols_array(
                             &[
-                                1.0,0.0,0.0,
-                                0.0,1.0,0.0,
+                                1.0,0.0,-100.0,
+                                0.0,1.0,-100.0,
+                                0.0,0.0,1.0,
+                            ]
+                        ),
+                    },
+                    render_element::Node::Circle { 
+                        radius: 10.0, 
+                        transform: glam::Mat3::from_cols_array(
+                            &[
+                                1.0,0.0,-200.0,
+                                0.0,1.0,-200.0,
                                 0.0,0.0,1.0,
                             ]
                         ),
@@ -657,4 +628,49 @@ pub fn test_op()-> render_element::Operation {
             }
         ],
     }
+}
+
+
+fn derive_buffers_from_node(node: &mut Node) -> (Vec<RenderCommand>, Vec<glam::Mat3>) {
+    let mut v = Vec::<RenderCommand>::new();
+    let mut t = Vec::<glam::Mat3>::new();
+    match node {
+        render_element::Node::Blend {layers}=> {
+            for l in layers.iter_mut() {
+                let (mut a,mut b) = derive_buffers_from_node(l);
+                v.append(&mut a);
+                t.append(&mut b);
+            }
+            if layers.is_empty() {
+                v.push(RenderCommand{
+                    id: 0,
+                    command: 1,
+                });
+            }
+        },
+        render_element::Node::Overwrite{commands} => {
+            for c in commands.iter_mut() {
+                let (mut a,mut b) = derive_buffers_from_node(c);
+                v.append(&mut a);
+                t.append(&mut b);
+            }
+            if commands.is_empty() {
+                v.push(RenderCommand{
+                    id: 0,
+                    command: 2,
+                });
+            }
+        },
+        render_element::Node::Circle{radius, transform} => {
+            v.push(RenderCommand{
+                id: 0,
+                command: 3,
+            });
+            
+            t.push(*transform);          
+            
+        },
+    }
+
+    return (v,t);
 }

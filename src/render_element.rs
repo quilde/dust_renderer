@@ -8,12 +8,12 @@ impl RenderElement {
 }
 
 #[derive(PartialEq)]
-pub enum Operation {
+pub enum Node {
     Overwrite{
-        commands: Vec<Operation>
+        commands: Vec<Node>
     },
     Blend {
-        layers: Vec<Operation>,
+        layers: Vec<Node>,
     },
     Circle {
         radius: f32,

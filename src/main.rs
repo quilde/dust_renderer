@@ -1,4 +1,4 @@
-use dust_renderer::{resize_window, setup, setup_single, DustMain};
+use dust_renderer::{resize_window, setup, setup_single, test_op, DustMain};
 
 use tao::{
     dpi::{LogicalSize, PhysicalSize},
@@ -9,7 +9,7 @@ use tao::{
 
 use wgpu::{Device, Surface, SurfaceConfiguration};
 
-use std::collections::HashMap;
+use std::{borrow::BorrowMut, collections::HashMap};
 use std::rc::Rc;
 
 mod render_element;
@@ -130,10 +130,12 @@ pub async fn run() {
             }
             Event::RedrawRequested(window_id) => {
                 println!("redrawing!\n");
-                dust_main.attachments.transforms.clear();
-                dust_main.test(&device, &queue);
-                dust_main.test(&device, &queue);
-                dust_main.attachments.transforms.update(&device, &queue);
+                dust_main.prepare_render(&device, &queue, test_op().borrow_mut());
+
+                //dust_main.attachments.transforms.clear();
+                //dust_main.test(&device, &queue);
+                //dust_main.test(&device, &queue);
+                //dust_main.attachments.transforms.update(&device, &queue);
                 let size1 = &window.as_ref().unwrap().inner_size();
                 let size = glam::UVec2 {
                     x: size1.width,

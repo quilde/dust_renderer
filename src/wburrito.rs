@@ -46,8 +46,7 @@ impl<T: Copy + ShaderSize + WriteInto + std::fmt::Debug> GPUVec<T> {
     /// We'd like to write directly to the mapped buffer, but that seemed
     /// tricky with wgpu.
     pub fn update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) -> bool {
-        dbg!(&self.label);
-        dbg!(&self.data);
+        
         let mut byte_buffer: Vec<u8> = Vec::new();
         
         let mut storage_buffer = encase::StorageBuffer::new(&mut byte_buffer);
@@ -55,7 +54,7 @@ impl<T: Copy + ShaderSize + WriteInto + std::fmt::Debug> GPUVec<T> {
             &self.data
         ).unwrap();
         
-        println!("byte_buffer {}  capacity {}", &byte_buffer.len(), self.capacity);
+        
         let realloc = byte_buffer.len() > self.capacity;
         if realloc {
             self.capacity = byte_buffer.len();
@@ -75,8 +74,8 @@ impl<T: Copy + ShaderSize + WriteInto + std::fmt::Debug> GPUVec<T> {
         
         queue.write_buffer(&self.buffer, 0, &byte_buffer.as_slice());
 
-        
-        println!("{:?}", &byte_buffer);
+        println!(":::[GPUVec] <{}> capacity {} byte_buffer {}: {:?}\n {:?}", self.label ,self.capacity, &byte_buffer.len(), &byte_buffer, &self.data);
+        //dbg!(&self.data);
         
         realloc
     }
@@ -112,6 +111,10 @@ impl<T: Copy + ShaderSize + WriteInto + std::fmt::Debug> GPUVec<T> {
 
     pub fn len(&self) -> usize {
         self.data.len()
+    }
+
+    pub fn replace(&mut self, v: Vec<T>) {
+        self.data = v;
     }
 }
 
@@ -338,6 +341,8 @@ impl SamplerWrap {
 pub struct GroupWrap {
     pub layout: wgpu::BindGroupLayout,
     pub bind_group: wgpu::BindGroup,
+    pub label_layout: String,
+    pub label_group: String,
 }
 impl GroupWrap {
     pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, entries: Vec<(BindGroupLayoutEntry, BindGroupEntry)>, label_layout: &str, label_group: &str) -> Self {
@@ -361,9 +366,26 @@ impl GroupWrap {
         Self {
             layout,
             bind_group,
+            label_layout: label_layout.to_string(),
+            label_group: label_group.to_string(),
         }
     }
     
-    
+    pub fn update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, entries: Vec<(BindGroupLayoutEntry, BindGroupEntry)>) {
+        let (entries_layout, entries_group): &(Vec<wgpu::BindGroupLayoutEntry>, Vec<wgpu::BindGroupEntry>) = &entries.into_iter().unzip();
+
+        self.layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &entries_layout.iter().as_slice(),
+            label: Some(self.label_layout.as_str()),
+        });
+        self.bind_group = device.create_bind_group(
+            &wgpu::BindGroupDescriptor {
+                layout: &self.layout,
+                entries: &entries_group.iter().as_slice(),
+                
+                label: Some(self.label_group.as_str()),
+            }
+        );
+    }
     
 }

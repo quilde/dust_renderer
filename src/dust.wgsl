@@ -4,26 +4,45 @@ fn main_image(@builtin(global_invocation_id) id: vec3u) {
     let screen_size = textureDimensions(screen);
 
     // Prevent overdraw for workgroups on the edge of the viewport
-    if (id.x >= screen_size.x || id.y >= screen_size.y) { return; }
+    if id.x >= screen_size.x || id.y >= screen_size.y { return; }
 
     // Pixel coordinates (centre of pixel, origin at bottom left)
-    var fragCoord = vec2f(f32(id.x) + .5, f32(screen_size.y - id.y) - .5);
+    var fragCoord_standard = vec2f(f32(id.x) + .5, f32(screen_size.y - id.y) - .5);
+    var fragCoord = vec2f(0., 0.);
+
+    var col = vec3f(1.,1.,1.);
 
     // Normalised pixel coordinates (from 0 to 1)
     var uv = fragCoord / vec2f(screen_size);
 
-    fragCoord = (vec3f(fragCoord, 1.0) * transforms[1]).xy;
+    var transforms_counter = 0;
 
-    // Time varying pixel colour
-    var col = vec3f(0.,2.,4.);
-    
-    var d = sdCircle(fragCoord, 100.);
-    
-    if d < 0.0 {
-        col = vec3f(f32(render_queue[0].id),0.,0.);
-    } else {
-        col = vec3f(f32(render_queue[1].id),1.,1.);
+
+    for (var i = 0u; i < arrayLength(&render_queue); i++) {
+        switch render_queue[i].command{
+            default: {
+            }
+            case 0u: {
+            }
+            case 1u: {
+            }
+            case 2u: {
+            }
+            case 3u: {
+                fragCoord = (vec3f(fragCoord_standard, 1.0) * transforms[transforms_counter]).xy;
+                transforms_counter++;
+                var d = sdCircle(fragCoord, 100.);
+
+                if d < 0.0 {
+                    col = vec3f(0., 0., 0.);
+                } else {
+                    col = vec3f(1., 1., 1.);
+                }
+            }
+        }
     }
+    
+    
 
     // Convert from gamma-encoded to linear colour space
     col = pow(col, vec3f(2.2));
@@ -47,7 +66,6 @@ struct RenderCommand {
 
 @group(2) @binding(0) var<storage> transforms: array<mat3x3<f32>>;
 
-fn sdCircle(p: vec2<f32>, r: f32) -> f32
-{
+fn sdCircle(p: vec2<f32>, r: f32) -> f32 {
     return length(p) - r;
 }
