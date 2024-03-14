@@ -213,6 +213,92 @@ impl StorageTextureWrap {
 }
 
 #[derive(Debug)]
+pub struct StorageTextureArrayWrap {
+    pub texture_size: wgpu::Extent3d,
+    pub texture: wgpu::Texture,
+    texture_view: wgpu::TextureView,
+
+}
+impl StorageTextureArrayWrap {
+    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, dimensions: &glam::UVec2, ) -> Self {
+        let texture_size = wgpu::Extent3d {
+            width: dimensions.x,
+            height: dimensions.y,
+            depth_or_array_layers: 1,
+        };
+        let texture = device.create_texture(
+            &wgpu::TextureDescriptor {
+                
+                size: texture_size,
+                mip_level_count: 1, // We'll talk about this a little later
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::COPY_SRC,
+                label: Some("target_texture"),
+                view_formats: &[],
+            }
+        );
+        
+        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        
+        Self {
+            texture_size,
+            texture,
+            texture_view,
+        }
+    }
+    
+    pub fn update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, dimensions: &glam::UVec2, ) {
+        let texture_size = wgpu::Extent3d {
+            width: dimensions.x,
+            height: dimensions.y,
+            depth_or_array_layers: 1,
+        };
+        let texture = device.create_texture(
+            &wgpu::TextureDescriptor {
+                
+                size: texture_size,
+                mip_level_count: 1, // We'll talk about this a little later
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::COPY_SRC,
+                label: Some("target_texture"),
+                view_formats: &[],
+            }
+        );
+        
+        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        
+        self.texture_size = texture_size;
+        self.texture = texture;
+        self.texture_view = texture_view;
+    }
+    
+    pub fn bind_group_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
+        wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::COMPUTE ,
+            ty: wgpu::BindingType::StorageTexture { 
+                access: wgpu::StorageTextureAccess::WriteOnly, 
+                format: wgpu::TextureFormat::Rgba8Unorm, 
+                view_dimension: wgpu::TextureViewDimension::D2, 
+            },
+            count: None,
+        }
+    }
+    
+    pub fn bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry {
+        wgpu::BindGroupEntry {
+            binding,
+            resource: wgpu::BindingResource::TextureView(&self.texture_view),
+        }
+    }
+    
+}
+
+#[derive(Debug)]
 pub struct TextureWrap {
     pub texture_size: wgpu::Extent3d,
     pub texture: wgpu::Texture,

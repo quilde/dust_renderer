@@ -7,23 +7,13 @@ use encase::ShaderType;
 mod render_element;
 mod wburrito;
 
-pub struct RenderQueue {
-    label: &'static str,
-    pub commands: Vec<RenderCommand>,
-}
-impl RenderQueue {
-    fn new(label: &'static str) -> Self {
-        Self {
-            label,
-            commands: Vec::new(),
-        }
-    }
-}
+
 
 #[derive(ShaderType, Clone, Copy, Debug)]
 pub struct RenderCommand {
     id: u32,
     command: u32,
+    indices: [u32; 4],
 }
 
 #[derive(Debug)]
@@ -31,12 +21,14 @@ pub struct Attachments {
     rq: wburrito::GPUVec<RenderCommand>,
     rq_group: wburrito::GroupWrap,
     target: wburrito::StorageTextureWrap,
+    error_map: wburrito::StorageTextureWrap,
     target_group: wburrito::GroupWrap,
     blit: wburrito::TextureWrap,
     blit_group: wburrito::GroupWrap,
     sampler: wburrito::SamplerWrap,
     pub transforms: wburrito::GPUVec<glam::Mat3>,
     streams_group: wburrito::GroupWrap,
+
 }
 impl Attachments {}
 
@@ -59,13 +51,20 @@ impl DustMain {
         let blit = wburrito::TextureWrap::new(device, queue, &dimensions);
         let sampler = wburrito::SamplerWrap::new(device, queue);
 
+        let error_map = wburrito::StorageTextureWrap::new(device, queue, &dimensions);
+
         let target_group = wburrito::GroupWrap::new(
             device,
             queue,
             vec![(
                 wburrito::StorageTextureWrap::bind_group_layout_entry(0),
                 target.bind_group_entry(0),
-            )],
+            ),
+            (
+                wburrito::StorageTextureWrap::bind_group_layout_entry(1),
+                error_map.bind_group_entry(1),
+            ),
+            ],
             "label_layout target",
             "label_group target",
         );
@@ -93,8 +92,8 @@ impl DustMain {
             queue,
             "label gpuvec",
             vec![
-                RenderCommand { id: 0, command: 0 },
-                RenderCommand { id: 1, command: 0 },
+                RenderCommand { id: 0, command: 0, indices: [0,0,0,0] },
+                RenderCommand { id: 1, command: 0, indices: [0,0,0,0] },
             ],
         );
 
@@ -214,6 +213,7 @@ impl DustMain {
             rq,
             rq_group,
             target,
+            error_map,
             blit,
             target_group,
             blit_group,
@@ -317,10 +317,12 @@ impl DustMain {
     }
     pub fn resize(&mut self, device: &Device, queue: &Queue, new_size: glam::UVec2) {
         let target = &mut self.attachments.target;
+        let error_map = &mut self.attachments.error_map;
         let blit = &mut self.attachments.blit;
         let sampler = &mut self.attachments.sampler;
         if new_size.x != 0 && new_size.y != 0 {
             target.update(device, queue, &new_size);
+            error_map.update(device, queue, &new_size);
             blit.update(device, queue, &new_size);
 
             let target_group = wburrito::GroupWrap::new(
@@ -329,7 +331,12 @@ impl DustMain {
                 vec![(
                     wburrito::StorageTextureWrap::bind_group_layout_entry(0),
                     target.bind_group_entry(0),
-                )],
+                ),
+                (
+                    wburrito::StorageTextureWrap::bind_group_layout_entry(1),
+                    error_map.bind_group_entry(1),
+                ),
+                ],
                 "label_layout target",
                 "label_group target",
             );
@@ -595,12 +602,13 @@ fn derive_buffers_from_node(node: &mut Node) -> (Vec<RenderCommand>, Vec<glam::M
                 t.append(&mut b);
             }
 
-            v.push(RenderCommand { id: 0, command: 1 });
+            v.push(RenderCommand { id: 0, command: 1 , indices: [0,0,0,0]});
         }
         render_element::Node::Circle { radius, transform } => {
-            v.push(RenderCommand { id: 0, command: 2 });
-
             t.push(*transform);
+            v.push(RenderCommand { id: 0, command: 2, indices: [(t.len()-1).try_into().unwrap(),0,0,0] });
+
+            
         }
     }
 

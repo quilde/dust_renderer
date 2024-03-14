@@ -15,11 +15,12 @@ fn main_image(@builtin(global_invocation_id) id: vec3u) {
     // Normalised pixel coordinates (from 0 to 1)
     var uv = fragCoord / vec2f(screen_size);
 
-    var transforms_counter = 0;
+    
 
 
     for (var i = 0u; i < arrayLength(&render_queue); i++) {
-        switch render_queue[i].command{
+        var command = render_queue[i].command;
+        switch command{
             default: {
             }
             case 0u: {
@@ -27,8 +28,8 @@ fn main_image(@builtin(global_invocation_id) id: vec3u) {
             case 1u: {
             }
             case 2u: {
-                fragCoord = (vec3f(fragCoord_standard, 1.0) * transforms[transforms_counter]).xy;
-                transforms_counter++;
+                fragCoord = (vec3f(fragCoord_standard, 1.0) * transforms[command.indices.x]).xy;
+                
                 var d = sdCircle(fragCoord, 100.);
 
                 if d < 0.0 {
@@ -56,13 +57,16 @@ fn main_image(@builtin(global_invocation_id) id: vec3u) {
 
 
 @group(0) @binding(0) var screen: texture_storage_2d<rgba8unorm,write>;
+@group(0) @binding(1) var error_map: texture_storage_2d<rgba8unorm,write>;
 //@group(0) @binding(1) var samplers: sampler;
 
 @group(1) @binding(0) var<storage> render_queue: array<RenderCommand>;
 
+
 struct RenderCommand {
     id: u32,
     command: u32,
+    indices: vec4u,
 }
 
 @group(2) @binding(0) var<storage> transforms: array<mat3x3<f32>>;
@@ -70,3 +74,4 @@ struct RenderCommand {
 fn sdCircle(p: vec2<f32>, r: f32) -> f32 {
     return length(p) - r;
 }
+
