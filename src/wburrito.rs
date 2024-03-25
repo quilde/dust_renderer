@@ -1,7 +1,8 @@
+use encase::{private::WriteInto, ShaderSize, StorageBuffer};
+use guillotiere::euclid::Size2D;
 use std::mem::size_of;
 use std::ops::Index;
 use wgpu::*;
-use encase::{StorageBuffer, ShaderSize, private::WriteInto};
 
 #[derive(Debug)]
 pub struct GPUVec<T: Copy> {
@@ -12,26 +13,22 @@ pub struct GPUVec<T: Copy> {
 }
 
 impl<T: Copy + ShaderSize + WriteInto + std::fmt::Debug> GPUVec<T> {
-    
-    pub fn new_from(device: &wgpu::Device, queue: &wgpu::Queue, label: &str, from: Vec<T> ) -> Self {
+    pub fn new_from(device: &wgpu::Device, queue: &wgpu::Queue, label: &str, from: Vec<T>) -> Self {
         //let staticfrom: &Vec<&T> = &from.iter().map(|i|{i}).collect();
         let mut byte_buffer: Vec<u8> = Vec::new();
-        
+
         let mut storage_buffer = encase::StorageBuffer::new(&mut byte_buffer);
-        storage_buffer.write(
-            &from
-        ).unwrap();
-        
+        storage_buffer.write(&from).unwrap();
+
         let buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some(label),
             size: byte_buffer.len() as u64,
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        
+
         queue.write_buffer(&buffer, 0, &byte_buffer.as_slice());
-        
-        
+
         Self {
             buffer,
             capacity: byte_buffer.len(),
@@ -39,22 +36,17 @@ impl<T: Copy + ShaderSize + WriteInto + std::fmt::Debug> GPUVec<T> {
             label: label.into(),
         }
     }
-    
-    
+
     /// Updates the underlying gpu buffer with self.data.
     ///
     /// We'd like to write directly to the mapped buffer, but that seemed
     /// tricky with wgpu.
     pub fn update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) -> bool {
-        
         let mut byte_buffer: Vec<u8> = Vec::new();
-        
+
         let mut storage_buffer = encase::StorageBuffer::new(&mut byte_buffer);
-        storage_buffer.write(
-            &self.data
-        ).unwrap();
-        
-        
+        storage_buffer.write(&self.data).unwrap();
+
         let realloc = byte_buffer.len() > self.capacity;
         if realloc {
             self.capacity = byte_buffer.len();
@@ -71,20 +63,26 @@ impl<T: Copy + ShaderSize + WriteInto + std::fmt::Debug> GPUVec<T> {
         queue.write_buffer(&self.buffer, 0, unsafe {
             std::slice::from_raw_parts_mut(self.data[..].as_ptr() as *mut u8, sz)
         }); */
-        
+
         queue.write_buffer(&self.buffer, 0, &byte_buffer.as_slice());
 
-        println!(":::[GPUVec] <{}> capacity {} byte_buffer {}: {:?}\n {:?}", self.label ,self.capacity, &byte_buffer.len(), &byte_buffer, &self.data);
+        println!(
+            ":::[GPUVec] <{}> capacity {} byte_buffer {}: {:?}\n {:?}",
+            self.label,
+            self.capacity,
+            &byte_buffer.len(),
+            &byte_buffer,
+            &self.data
+        );
         //dbg!(&self.data);
-        
+
         realloc
     }
-    
 
     pub fn bind_group_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
         wgpu::BindGroupLayoutEntry {
             binding,
-            visibility: wgpu::ShaderStages::COMPUTE ,
+            visibility: wgpu::ShaderStages::COMPUTE,
             ty: wgpu::BindingType::Buffer {
                 ty: wgpu::BufferBindingType::Storage { read_only: true },
                 has_dynamic_offset: false,
@@ -131,171 +129,204 @@ pub struct StorageTextureWrap {
     pub texture_size: wgpu::Extent3d,
     pub texture: wgpu::Texture,
     texture_view: wgpu::TextureView,
-
 }
 impl StorageTextureWrap {
-    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, dimensions: &glam::UVec2, ) -> Self {
+    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, dimensions: &glam::UVec2) -> Self {
         let texture_size = wgpu::Extent3d {
             width: dimensions.x,
             height: dimensions.y,
             depth_or_array_layers: 1,
         };
-        let texture = device.create_texture(
-            &wgpu::TextureDescriptor {
-                
-                size: texture_size,
-                mip_level_count: 1, // We'll talk about this a little later
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8Unorm,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::COPY_SRC,
-                label: Some("target_texture"),
-                view_formats: &[],
-            }
-        );
-        
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: texture_size,
+            mip_level_count: 1, // We'll talk about this a little later
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::STORAGE_BINDING
+                | wgpu::TextureUsages::COPY_SRC,
+            label: Some("target_texture"),
+            view_formats: &[],
+        });
+
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        
+
         Self {
             texture_size,
             texture,
             texture_view,
         }
     }
-    
-    pub fn update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, dimensions: &glam::UVec2, ) {
+
+    pub fn update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, dimensions: &glam::UVec2) {
         let texture_size = wgpu::Extent3d {
             width: dimensions.x,
             height: dimensions.y,
             depth_or_array_layers: 1,
         };
-        let texture = device.create_texture(
-            &wgpu::TextureDescriptor {
-                
-                size: texture_size,
-                mip_level_count: 1, // We'll talk about this a little later
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8Unorm,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::COPY_SRC,
-                label: Some("target_texture"),
-                view_formats: &[],
-            }
-        );
-        
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: texture_size,
+            mip_level_count: 1, // We'll talk about this a little later
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::STORAGE_BINDING
+                | wgpu::TextureUsages::COPY_SRC,
+            label: Some("target_texture"),
+            view_formats: &[],
+        });
+
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        
+
         self.texture_size = texture_size;
         self.texture = texture;
         self.texture_view = texture_view;
     }
-    
+
     pub fn bind_group_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
         wgpu::BindGroupLayoutEntry {
             binding,
-            visibility: wgpu::ShaderStages::COMPUTE ,
-            ty: wgpu::BindingType::StorageTexture { 
-                access: wgpu::StorageTextureAccess::WriteOnly, 
-                format: wgpu::TextureFormat::Rgba8Unorm, 
-                view_dimension: wgpu::TextureViewDimension::D2, 
+            visibility: wgpu::ShaderStages::COMPUTE,
+            ty: wgpu::BindingType::StorageTexture {
+                access: wgpu::StorageTextureAccess::WriteOnly,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                view_dimension: wgpu::TextureViewDimension::D2,
             },
             count: None,
         }
     }
-    
+
     pub fn bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry {
         wgpu::BindGroupEntry {
             binding,
             resource: wgpu::BindingResource::TextureView(&self.texture_view),
         }
     }
-    
 }
 
-#[derive(Debug)]
-pub struct StorageTextureArrayWrap {
+//#[derive(Debug)]
+pub struct StorageTextureAtlas {
     pub texture_size: wgpu::Extent3d,
     pub texture: wgpu::Texture,
     texture_view: wgpu::TextureView,
-
+    allocator: guillotiere::AtlasAllocator,
 }
-impl StorageTextureArrayWrap {
-    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, dimensions: &glam::UVec2, ) -> Self {
+impl StorageTextureAtlas {
+    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, dimensions: &glam::UVec2) -> Self {
         let texture_size = wgpu::Extent3d {
             width: dimensions.x,
             height: dimensions.y,
             depth_or_array_layers: 1,
         };
-        let texture = device.create_texture(
-            &wgpu::TextureDescriptor {
-                
-                size: texture_size,
-                mip_level_count: 1, // We'll talk about this a little later
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8Unorm,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::COPY_SRC,
-                label: Some("target_texture"),
-                view_formats: &[],
-            }
-        );
-        
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: texture_size,
+            mip_level_count: 1, // We'll talk about this a little later
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::STORAGE_BINDING
+                | wgpu::TextureUsages::COPY_SRC,
+            label: Some("target_texture"),
+            view_formats: &[],
+        });
+
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        
+
+        let allocator = guillotiere::AtlasAllocator::new(guillotiere::size2(1000 as i32, 1000 as i32));
+
         Self {
             texture_size,
             texture,
             texture_view,
+            allocator,
         }
     }
-    
-    pub fn update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, dimensions: &glam::UVec2, ) {
+
+    pub fn allocate_image(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        data: Vec<u8>,
+        texture_size: Extent3d,
+    ) -> guillotiere::AllocId {
+        let allocation = self
+            .allocator
+            .allocate(guillotiere::size2(texture_size.width as i32, texture_size.height as i32))
+            .unwrap();
+
+        if texture_size.width > self.texture_size.width || texture_size.height > self.texture_size.height {
+            self.update(device, queue, &glam::UVec2 { x: texture_size.width, y: texture_size.height });
+        }
+
+        queue.write_texture(
+            ImageCopyTexture {
+                texture: &self.texture,
+                mip_level: 0,
+                origin: Origin3d { x: allocation.rectangle.min.x as u32, y: allocation.rectangle.min.y as u32, z: 0 },
+                aspect: wgpu::TextureAspect::All,
+            },
+            data.as_slice(),
+            ImageDataLayout { 
+                offset: (allocation.rectangle.min.x + allocation.rectangle.min.y * texture_size.width as i32) as u64, 
+                bytes_per_row: Some(1024), 
+                rows_per_image: None },
+            texture_size,
+        );
+
+        return allocation.id;
+    }
+    pub fn update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, dimensions: &glam::UVec2) {
         let texture_size = wgpu::Extent3d {
             width: dimensions.x,
             height: dimensions.y,
             depth_or_array_layers: 1,
         };
-        let texture = device.create_texture(
-            &wgpu::TextureDescriptor {
-                
-                size: texture_size,
-                mip_level_count: 1, // We'll talk about this a little later
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8Unorm,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::COPY_SRC,
-                label: Some("target_texture"),
-                view_formats: &[],
-            }
-        );
-        
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: texture_size,
+            mip_level_count: 1, // We'll talk about this a little later
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::STORAGE_BINDING
+                | wgpu::TextureUsages::COPY_SRC,
+            label: Some("target_texture"),
+            view_formats: &[],
+        });
+
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        
+
         self.texture_size = texture_size;
         self.texture = texture;
         self.texture_view = texture_view;
     }
-    
+
     pub fn bind_group_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
         wgpu::BindGroupLayoutEntry {
             binding,
-            visibility: wgpu::ShaderStages::COMPUTE ,
-            ty: wgpu::BindingType::StorageTexture { 
-                access: wgpu::StorageTextureAccess::WriteOnly, 
-                format: wgpu::TextureFormat::Rgba8Unorm, 
-                view_dimension: wgpu::TextureViewDimension::D2, 
+            visibility: wgpu::ShaderStages::COMPUTE,
+            ty: wgpu::BindingType::StorageTexture {
+                access: wgpu::StorageTextureAccess::WriteOnly,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                view_dimension: wgpu::TextureViewDimension::D2,
             },
             count: None,
         }
     }
-    
+
     pub fn bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry {
         wgpu::BindGroupEntry {
             binding,
             resource: wgpu::BindingResource::TextureView(&self.texture_view),
         }
     }
-    
 }
 
 #[derive(Debug)]
@@ -303,106 +334,97 @@ pub struct TextureWrap {
     pub texture_size: wgpu::Extent3d,
     pub texture: wgpu::Texture,
     texture_view: wgpu::TextureView,
-
 }
 impl TextureWrap {
-    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, dimensions: &glam::UVec2, ) -> Self {
+    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, dimensions: &glam::UVec2) -> Self {
         let texture_size = wgpu::Extent3d {
             width: dimensions.x,
             height: dimensions.y,
             depth_or_array_layers: 1,
         };
-        let texture = device.create_texture(
-            &wgpu::TextureDescriptor {
-                size: texture_size,
-                mip_level_count: 1, // We'll talk about this a little later
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8Unorm,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST ,
-                label: Some("paint texture"),
-                view_formats: &[],
-            }
-        );
-        
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: texture_size,
+            mip_level_count: 1, // We'll talk about this a little later
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            label: Some("paint texture"),
+            view_formats: &[],
+        });
+
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        
+
         Self {
             texture_size,
             texture,
             texture_view,
         }
     }
-    
-    pub fn update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, dimensions: &glam::UVec2, ) {
+
+    pub fn update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, dimensions: &glam::UVec2) {
         let texture_size = wgpu::Extent3d {
             width: dimensions.x,
             height: dimensions.y,
             depth_or_array_layers: 1,
         };
-        let texture = device.create_texture(
-            &wgpu::TextureDescriptor {
-                size: texture_size,
-                mip_level_count: 1, // We'll talk about this a little later
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8Unorm,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST ,
-                label: Some("paint texture"),
-                view_formats: &[],
-            }
-        );
-        
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: texture_size,
+            mip_level_count: 1, // We'll talk about this a little later
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            label: Some("paint texture"),
+            view_formats: &[],
+        });
+
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        
+
         self.texture_size = texture_size;
         self.texture = texture;
         self.texture_view = texture_view;
     }
-    
+
     pub fn bind_group_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
         wgpu::BindGroupLayoutEntry {
             binding: 0,
             visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Texture { 
-                sample_type: wgpu::TextureSampleType::Float { filterable: true }, 
-                view_dimension: wgpu::TextureViewDimension::D2, 
-                multisampled: false, 
+            ty: wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                view_dimension: wgpu::TextureViewDimension::D2,
+                multisampled: false,
             },
             count: None,
         }
     }
-    
+
     pub fn bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry {
         wgpu::BindGroupEntry {
             binding,
             resource: wgpu::BindingResource::TextureView(&self.texture_view),
         }
     }
-    
 }
 #[derive(Debug)]
 pub struct SamplerWrap {
     sampler: wgpu::Sampler,
-
 }
 impl SamplerWrap {
-    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, ) -> Self {
+    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-                address_mode_u: wgpu::AddressMode::ClampToEdge,
-                address_mode_v: wgpu::AddressMode::ClampToEdge,
-                address_mode_w: wgpu::AddressMode::ClampToEdge,
-                mag_filter: wgpu::FilterMode::Linear,
-                min_filter: wgpu::FilterMode::Nearest,
-                mipmap_filter: wgpu::FilterMode::Nearest,
-                ..Default::default()
-            });
-        
-        Self {
-            sampler,
-        }
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
+
+        Self { sampler }
     }
-    
+
     pub fn bind_group_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
         wgpu::BindGroupLayoutEntry {
             binding,
@@ -411,16 +433,15 @@ impl SamplerWrap {
             // corresponding Texture entry above.
             ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
             count: None,
-        } 
+        }
     }
-    
+
     pub fn bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry {
         wgpu::BindGroupEntry {
             binding,
             resource: wgpu::BindingResource::Sampler(&self.sampler),
         }
     }
-    
 }
 
 #[derive(Debug)]
@@ -431,24 +452,30 @@ pub struct GroupWrap {
     pub label_group: String,
 }
 impl GroupWrap {
-    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, entries: Vec<(BindGroupLayoutEntry, BindGroupEntry)>, label_layout: &str, label_group: &str) -> Self {
-        let (entries_layout, entries_group): &(Vec<wgpu::BindGroupLayoutEntry>, Vec<wgpu::BindGroupEntry>) = &entries.into_iter().unzip();
-        
-        let layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &entries_layout.iter().as_slice(),
-                label: Some(label_layout),
+    pub fn new(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        entries: Vec<(BindGroupLayoutEntry, BindGroupEntry)>,
+        label_layout: &str,
+        label_group: &str,
+    ) -> Self {
+        let (entries_layout, entries_group): &(
+            Vec<wgpu::BindGroupLayoutEntry>,
+            Vec<wgpu::BindGroupEntry>,
+        ) = &entries.into_iter().unzip();
+
+        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &entries_layout.iter().as_slice(),
+            label: Some(label_layout),
         });
-        
-        let bind_group = device.create_bind_group(
-            &wgpu::BindGroupDescriptor {
-                layout: &layout,
-                entries: &entries_group.iter().as_slice(),
-                
-                label: Some(label_group),
-            }
-        );
-        
+
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &layout,
+            entries: &entries_group.iter().as_slice(),
+
+            label: Some(label_group),
+        });
+
         Self {
             layout,
             bind_group,
@@ -456,22 +483,27 @@ impl GroupWrap {
             label_group: label_group.to_string(),
         }
     }
-    
-    pub fn update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, entries: Vec<(BindGroupLayoutEntry, BindGroupEntry)>) {
-        let (entries_layout, entries_group): &(Vec<wgpu::BindGroupLayoutEntry>, Vec<wgpu::BindGroupEntry>) = &entries.into_iter().unzip();
+
+    pub fn update(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        entries: Vec<(BindGroupLayoutEntry, BindGroupEntry)>,
+    ) {
+        let (entries_layout, entries_group): &(
+            Vec<wgpu::BindGroupLayoutEntry>,
+            Vec<wgpu::BindGroupEntry>,
+        ) = &entries.into_iter().unzip();
 
         self.layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &entries_layout.iter().as_slice(),
             label: Some(self.label_layout.as_str()),
         });
-        self.bind_group = device.create_bind_group(
-            &wgpu::BindGroupDescriptor {
-                layout: &self.layout,
-                entries: &entries_group.iter().as_slice(),
-                
-                label: Some(self.label_group.as_str()),
-            }
-        );
+        self.bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &self.layout,
+            entries: &entries_group.iter().as_slice(),
+
+            label: Some(self.label_group.as_str()),
+        });
     }
-    
 }

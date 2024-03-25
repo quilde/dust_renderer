@@ -13,7 +13,7 @@ mod wburrito;
 pub struct RenderCommand {
     id: u32,
     command: u32,
-    indices: [u32; 4],
+    indices: glam::Vec4,
 }
 
 #[derive(Debug)]
@@ -92,8 +92,8 @@ impl DustMain {
             queue,
             "label gpuvec",
             vec![
-                RenderCommand { id: 0, command: 0, indices: [0,0,0,0] },
-                RenderCommand { id: 1, command: 0, indices: [0,0,0,0] },
+                RenderCommand { id: 0, command: 0, indices: glam::vec4(0.0, 0.0, 0.0, 0.0) },
+                RenderCommand { id: 1, command: 0, indices: glam::vec4(0.0, 0.0, 0.0, 0.0) },
             ],
         );
 
@@ -602,11 +602,11 @@ fn derive_buffers_from_node(node: &mut Node) -> (Vec<RenderCommand>, Vec<glam::M
                 t.append(&mut b);
             }
 
-            v.push(RenderCommand { id: 0, command: 1 , indices: [0,0,0,0]});
+            v.push(RenderCommand { id: 0, command: 1 , indices: glam::vec4(0.0, 0.0, 0.0, 0.0)});
         }
         render_element::Node::Circle { radius, transform } => {
             t.push(*transform);
-            v.push(RenderCommand { id: 0, command: 2, indices: [(t.len()-1).try_into().unwrap(),0,0,0] });
+            v.push(RenderCommand { id: 0, command: 2, indices: glam::vec4(0.0, 0.0, 0.0, 0.0) });
 
             
         }

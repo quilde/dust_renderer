@@ -28,7 +28,7 @@ fn main_image(@builtin(global_invocation_id) id: vec3u) {
             case 1u: {
             }
             case 2u: {
-                fragCoord = (vec3f(fragCoord_standard, 1.0) * transforms[command.indices.x]).xy;
+                fragCoord = (vec3f(fragCoord_standard, 1.0) * transforms[i]).xy;
                 
                 var d = sdCircle(fragCoord, 100.);
 
@@ -66,7 +66,7 @@ fn main_image(@builtin(global_invocation_id) id: vec3u) {
 struct RenderCommand {
     id: u32,
     command: u32,
-    indices: vec4u,
+    indices: vec4f,
 }
 
 @group(2) @binding(0) var<storage> transforms: array<mat3x3<f32>>;
