@@ -1,21 +1,15 @@
 # Dust Renderer 
-*a 2d sdf-based renderer*
-
+*a 2d sdf-based renderer written in rust using wgpu*
 ## Status
-
 == project on ice. ==
-
-When you are learning wgpu you might find [src/dumb_errors.md] helpful
-
-features implemented:
+When you are learning wgpu you might find [[src/dumb_errors.md]] helpful
+### features implemented:
+![vscode with dust renderer window open, rendering two black circles](https://github.com/quilde/dust_renderer/blob/main/src/rendering3.PNG)
 
 - able to draw circles
 - image fills kindof (very broken)
 - all sorts of behind the scenes stuff, 
 - safe wrappers around storage buffers, texture atlas etc. You can find them inthe wburrito module. The storage buffer wrappers use a version of [vger's GPUVec](https://github.com/audulus/vger-rs/blob/main/src/gpu_vec.rs) that has been modified to use [encase](https://crates.io/crates/encase) to ensure correct memory layout. the texture atlas version uses [guillotiere](https://crates.io/crates/guillotiere)
-
-
-![vscode with dust renderer window open, rendering two black circles](https://github.com/quilde/dust_renderer/blob/main/src/rendering3.PNG)
 
 
 ## Project goals
@@ -33,7 +27,7 @@ features implemented:
 - finding ways to improve experience with wgpu and to help newcomers (✅)
 
 ## Why compute shaders if we are going for a simple sdf-approach ?
-Dust Renderer was going for what Raph Levien calls the "shader toy approach".
+Dust Renderer was going for what Raph Levien calls the "shader toy approach", meaning the threads don't communicate, they just compute their color from the underlying data.
 
 The dust renderer uses Signed Distance Fields. (I'm not going to be the ten thousandth person gushing about how good they are and showing cool gifs. You can find all of that online. they're pretty cool though)
 
