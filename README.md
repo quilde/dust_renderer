@@ -2,10 +2,10 @@
 *a 2d sdf-based renderer written in rust using wgpu*
 ## Status
 == project on ice. ==
-When you are learning wgpu you might find [[src/dumb_errors.md]] helpful
-### features implemented:
-![vscode with dust renderer window open, rendering two black circles](https://github.com/quilde/dust_renderer/blob/main/src/rendering3.PNG)
 
+When you are learning wgpu you might find [src/dumb_errors.md](src/dumb_errors.md) helpful
+![vscode with dust renderer window open, rendering two black circles](https://github.com/quilde/dust_renderer/blob/main/src/rendering3.PNG)
+### features implemented:
 - able to draw circles
 - image fills kindof (very broken)
 - all sorts of behind the scenes stuff, 
@@ -23,6 +23,7 @@ When you are learning wgpu you might find [[src/dumb_errors.md]] helpful
         - [GPU text rendering with vector textures](https://wdobbie.com/post/gpu-text-rendering-with-vector-textures/)
         - [Easy Scalable Text Rendering on the GPU](https://medium.com/@evanwallace/easy-scalable-text-rendering-on-the-gpu-c3f4d782c5ac)
         - [GPU Font Rendering](https://github.com/GreenLightning/gpu-font-rendering)
+    - antialiasing
 - learn about rendering ✅✅✅
 - finding ways to improve experience with wgpu and to help newcomers (✅)
 
