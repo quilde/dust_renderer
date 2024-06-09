@@ -47,8 +47,9 @@ Shader 'compute ShaderModuleDescriptor' parsing error: expected '<', found '>'
 
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 error: process didn't exit successfully: `target\debug\dust_renderer.exe` (exit code: 101)
-
+```wgsl
 array<mat3x3<f32>>
+```
 
 # git
 

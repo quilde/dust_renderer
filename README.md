@@ -48,3 +48,5 @@ I might return to this in the future if I see more value in doing this and have 
 - Vello is now released and pretty much usable
 - I have a lot to do
 
+##  Attributions
+Images in src/ are "Visual developments for Episode 39" by David Revoy 
