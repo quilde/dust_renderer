@@ -1,5 +1,6 @@
 use dust_renderer::{resize_window, setup, setup_single, test_op, DustMain};
 
+use image::{GenericImageView, EncodableLayout};
 use tao::{
     dpi::{LogicalSize, PhysicalSize},
     event::{self, ElementState, Event, KeyEvent, WindowEvent},
@@ -7,7 +8,7 @@ use tao::{
     window::{Window, WindowBuilder, WindowId},
 };
 
-use wgpu::{Device, Surface, SurfaceConfiguration};
+use wgpu::{Device, Extent3d, Surface, SurfaceConfiguration};
 
 use std::{borrow::BorrowMut, collections::HashMap};
 use std::rc::Rc;
@@ -47,6 +48,15 @@ pub async fn run() {
 
     let mut dust_main = DustMain::new(&device, &queue, &surface_configuration, size);
     dust_main.setup(&device, &queue);
+    //let image = std::fs::read("2023-08-15_episode_39_visual-development_the_awekening_of_the_komona_tree.jpg").unwrap();
+    let image = image::io::Reader::open(r"C:\Users\ensel\Documents\nils\Programming\rust\gui\renderer\src\2023-08-15_episode_39_visual-development_the_awekening_of_the_komona_tree.jpg").unwrap().decode().unwrap();
+    
+    let texture_size = Extent3d {
+        width: image.dimensions().0,
+        height: image.dimensions().1,
+        depth_or_array_layers: 1,
+    };
+    dust_main.allocate_image(&device, &queue, image.to_rgba8().as_bytes().to_vec(), texture_size);
     //dust.add_plugin("dust_main plugin", Rc::new(dust_main) );
     //dust.prepare(&device, &queue, &surface_configuration);
     //env_logger::init();

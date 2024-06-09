@@ -16,7 +16,7 @@ pub struct RenderCommand {
     indices: glam::Vec4,
 }
 
-#[derive(Debug)]
+//#[derive(Debug)]
 pub struct Attachments {
     rq: wburrito::GPUVec<RenderCommand>,
     rq_group: wburrito::GroupWrap,
@@ -27,6 +27,7 @@ pub struct Attachments {
     blit_group: wburrito::GroupWrap,
     sampler: wburrito::SamplerWrap,
     pub transforms: wburrito::GPUVec<glam::Mat3>,
+    atlas: wburrito::StorageTextureAtlas,
     streams_group: wburrito::GroupWrap,
 
 }
@@ -117,13 +118,23 @@ impl DustMain {
             ])],
         );
 
+        let atlas = wburrito::StorageTextureAtlas::new(device, queue,);
+
         let streams_group = wburrito::GroupWrap::new(
             device,
             queue,
             vec![(
                 wburrito::GPUVec::<glam::Mat3>::bind_group_layout_entry(0),
                 transforms.bind_group_entry(0),
-            )],
+            ),
+            (
+                wburrito::StorageTextureAtlas::bind_group_layout_entry(1),
+                atlas.bind_group_entry(1),
+            ),
+            (
+                wburrito::SamplerWrap::bind_group_layout_entry(2),
+                sampler.bind_group_entry(2),
+            ),],
             "label_layout",
             "label_group",
         );
@@ -219,6 +230,7 @@ impl DustMain {
             blit_group,
             sampler,
             transforms,
+            atlas,
             streams_group,
         };
 
@@ -239,6 +251,35 @@ impl DustMain {
             ]));
     }
 
+    pub fn allocate_image(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        data: Vec<u8>,
+        texture_size: wgpu::Extent3d,
+        )  -> guillotiere::Allocation {
+        let mut transforms = &mut self.attachments.transforms;
+        let mut atlas = &mut self.attachments.atlas;
+        let mut sampler = &mut self.attachments.sampler;
+
+        let allocation = atlas.allocate_image(device, queue, &data, texture_size);
+        self.attachments.streams_group.update(device, queue, vec![
+            (
+                wburrito::GPUVec::<glam::Mat3>::bind_group_layout_entry(0),
+                transforms.bind_group_entry(0),
+            ),
+            (
+                wburrito::StorageTextureAtlas::bind_group_layout_entry(1),
+                atlas.bind_group_entry(1),
+            ),
+            (
+                wburrito::SamplerWrap::bind_group_layout_entry(2),
+                sampler.bind_group_entry(2),
+            ),
+        ]);
+        allocation
+    }
+
     pub fn prepare_render(
         &mut self,
         device: &Device,
@@ -247,7 +288,9 @@ impl DustMain {
     ) {
         let (v, t) = derive_buffers_from_node(node);
 
-        let mut transforms = &mut self.attachments.transforms;
+        let transforms = &mut self.attachments.transforms;
+        let atlas = &mut self.attachments.atlas;
+        let sampler = &mut self.attachments.sampler;
         transforms.replace(t);
         let realloc_transforms = transforms.update(device, queue);
         if realloc_transforms {
@@ -257,7 +300,15 @@ impl DustMain {
                 vec![(
                     wburrito::GPUVec::<glam::Mat3>::bind_group_layout_entry(0),
                     transforms.bind_group_entry(0),
-                )],
+                ),
+                (
+                    wburrito::StorageTextureAtlas::bind_group_layout_entry(1),
+                    atlas.bind_group_entry(1),
+                ),
+                (
+                    wburrito::SamplerWrap::bind_group_layout_entry(2),
+                    sampler.bind_group_entry(2),
+                ),],
             );
         }
 

@@ -216,10 +216,10 @@ pub struct StorageTextureAtlas {
     allocator: guillotiere::AtlasAllocator,
 }
 impl StorageTextureAtlas {
-    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, dimensions: &glam::UVec2) -> Self {
+    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, ) -> Self {
         let texture_size = wgpu::Extent3d {
-            width: dimensions.x,
-            height: dimensions.y,
+            width: 2000,
+            height: 2000,
             depth_or_array_layers: 1,
         };
         let texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -230,15 +230,15 @@ impl StorageTextureAtlas {
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_DST
-                | wgpu::TextureUsages::STORAGE_BINDING
-                | wgpu::TextureUsages::COPY_SRC,
-            label: Some("target_texture"),
+                | wgpu::TextureUsages::STORAGE_BINDING,
+
+            label: Some("storage texture atlas"),
             view_formats: &[],
         });
 
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let allocator = guillotiere::AtlasAllocator::new(guillotiere::size2(1000 as i32, 1000 as i32));
+        let allocator = guillotiere::AtlasAllocator::new(guillotiere::size2(2000 as i32, 2000 as i32));
 
         Self {
             texture_size,
@@ -252,18 +252,22 @@ impl StorageTextureAtlas {
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        data: Vec<u8>,
-        texture_size: Extent3d,
-    ) -> guillotiere::AllocId {
+        data: &[u8],
+        texture_size: wgpu::Extent3d,
+    ) -> guillotiere::Allocation {
+        println!("allocating image with size {:#?}", texture_size);
+
         let allocation = self
             .allocator
             .allocate(guillotiere::size2(texture_size.width as i32, texture_size.height as i32))
-            .unwrap();
+            .or_else(| | {
+                println!("make texture bigger");
+                self.update(device, queue, &glam::UVec2 { x: 3000, y: 3000 });
+                return self.allocator.allocate(guillotiere::size2(texture_size.width as i32, texture_size.height as i32));
+            }).unwrap();
 
-        if texture_size.width > self.texture_size.width || texture_size.height > self.texture_size.height {
-            self.update(device, queue, &glam::UVec2 { x: texture_size.width, y: texture_size.height });
-        }
-
+        println!("{:#?}", &allocation);
+        
         queue.write_texture(
             ImageCopyTexture {
                 texture: &self.texture,
@@ -271,15 +275,15 @@ impl StorageTextureAtlas {
                 origin: Origin3d { x: allocation.rectangle.min.x as u32, y: allocation.rectangle.min.y as u32, z: 0 },
                 aspect: wgpu::TextureAspect::All,
             },
-            data.as_slice(),
-            ImageDataLayout { 
-                offset: (allocation.rectangle.min.x + allocation.rectangle.min.y * texture_size.width as i32) as u64, 
-                bytes_per_row: Some(1024), 
+            data,
+            ImageDataLayout {
+                offset: 0 as u64, 
+                bytes_per_row: Some(4 * texture_size.width),
                 rows_per_image: None },
             texture_size,
         );
 
-        return allocation.id;
+        return allocation;
     }
     pub fn update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, dimensions: &glam::UVec2) {
         let texture_size = wgpu::Extent3d {
@@ -312,10 +316,10 @@ impl StorageTextureAtlas {
         wgpu::BindGroupLayoutEntry {
             binding,
             visibility: wgpu::ShaderStages::COMPUTE,
-            ty: wgpu::BindingType::StorageTexture {
-                access: wgpu::StorageTextureAccess::WriteOnly,
-                format: wgpu::TextureFormat::Rgba8Unorm,
+            ty: wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Float { filterable: true },
                 view_dimension: wgpu::TextureViewDimension::D2,
+                multisampled: false,
             },
             count: None,
         }
@@ -428,7 +432,7 @@ impl SamplerWrap {
     pub fn bind_group_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
         wgpu::BindGroupLayoutEntry {
             binding,
-            visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+            visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT | wgpu::ShaderStages::COMPUTE,
             // This should match the filterable field of the
             // corresponding Texture entry above.
             ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
